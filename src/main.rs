@@ -9,6 +9,9 @@ fn main() {
         io::stdin().read_line(&mut input).expect("Input error. Exiting");
         let input = input.trim();
 
-        println!("{}: command not found", input);
+        match input{
+            "exit" => return,
+            _ => println!("{}: command not found", input)
+        }
     }
 }
