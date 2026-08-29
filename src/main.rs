@@ -1,9 +1,14 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 
+enum CommandType{
+    ShellBuiltin
+}
+
 enum Command<'a>{
     Exit,
-    Echo(&'a str)
+    Echo(&'a str),
+    Type(&'a str)
 }
 
 impl Command<'_>{
@@ -12,7 +17,16 @@ impl Command<'_>{
         match command{
             "exit" => Some(Command::Exit),
             "echo" => Some(Command::Echo(params)),
+            "type" => Some(Command::Type(params)),
             _ => None
+        }
+    }
+
+    fn get_type(&self) -> CommandType{
+        match self{
+            Command::Exit => CommandType::ShellBuiltin,
+            Command::Echo(_) => CommandType::ShellBuiltin,
+            Command::Type(_) => CommandType::ShellBuiltin
         }
     }
 }
@@ -34,6 +48,19 @@ fn main() {
         match command.unwrap(){
             Command::Exit => return,
             Command::Echo(text) => { println!("{}", text) }
+            Command::Type(cmd_name) => {
+                let checked_command = Command::from_str(cmd_name);
+                if checked_command.is_none(){
+                    println!("{}: not found", cmd_name);
+                    continue;
+                }
+
+                match checked_command.unwrap().get_type(){
+                    CommandType::ShellBuiltin => {
+                        println!("{} is a shell builtin", cmd_name);
+                    }
+                }
+            }
         }
     }
 }
