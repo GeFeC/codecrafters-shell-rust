@@ -2,31 +2,43 @@
 use std::io::{self, Write};
 
 enum CommandType{
+    Invalid,
     ShellBuiltin
 }
 
-enum Command<'a>{
+enum CmdVariant<'a>{
+    Invalid,
     Exit,
     Echo(&'a str),
     Type(&'a str)
 }
 
+struct Command<'a>{
+    name: &'a str,
+    variant: CmdVariant<'a>,
+    r#type: CommandType
+}
+
 impl Command<'_>{
-    fn from_str(prompt: &str) -> Option<Command<'_>>{
+    fn from_prompt(prompt: &str) -> Command<'_>{
         let (command, params) = prompt.split_once(' ').unwrap_or((prompt, ""));
         match command{
-            "exit" => Some(Command::Exit),
-            "echo" => Some(Command::Echo(params)),
-            "type" => Some(Command::Type(params)),
-            _ => None
-        }
-    }
-
-    fn get_type(&self) -> CommandType{
-        match self{
-            Command::Exit => CommandType::ShellBuiltin,
-            Command::Echo(_) => CommandType::ShellBuiltin,
-            Command::Type(_) => CommandType::ShellBuiltin
+            "exit" => Command{ 
+                name: command, 
+                variant: CmdVariant::Exit, 
+                r#type: CommandType::ShellBuiltin 
+            },
+            "echo" => Command{ 
+                name: command, 
+                variant: CmdVariant::Echo(params), 
+                r#type: CommandType::ShellBuiltin 
+            },
+            "type" => Command{ 
+                name: command, 
+                variant: CmdVariant::Type(params), 
+                r#type: CommandType::ShellBuiltin 
+            },
+            _ => Command{ name: "", variant: CmdVariant::Invalid, r#type: CommandType::Invalid }
         }
     }
 }
@@ -38,24 +50,19 @@ fn main() {
         let mut input = String::new();
         io::stdin().read_line(&mut input).expect("Input error. Exiting");
         let input = input.trim();
-        let command = Command::from_str(input);
+        let command = Command::from_prompt(input);
 
-        if command.is_none(){
-            println!("{}: command not found", input);
-            continue;
-        }
+        match command.variant{
+            CmdVariant::Invalid => println!("{}: command not found", command.name),
+            CmdVariant::Exit => return,
+            CmdVariant::Echo(text) => { println!("{}", text) }
+            CmdVariant::Type(cmd_name) => {
+                let checked_command = Command::from_prompt(cmd_name);
 
-        match command.unwrap(){
-            Command::Exit => return,
-            Command::Echo(text) => { println!("{}", text) }
-            Command::Type(cmd_name) => {
-                let checked_command = Command::from_str(cmd_name);
-                if checked_command.is_none(){
-                    println!("{}: not found", cmd_name);
-                    continue;
-                }
-
-                match checked_command.unwrap().get_type(){
+                match checked_command.r#type{
+                    CommandType::Invalid => {
+                        println!("{}: not found", cmd_name);
+                    }
                     CommandType::ShellBuiltin => {
                         println!("{} is a shell builtin", cmd_name);
                     }
