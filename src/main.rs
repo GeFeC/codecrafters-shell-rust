@@ -38,7 +38,7 @@ impl Command<'_>{
                 variant: CmdVariant::Type(params), 
                 r#type: CommandType::ShellBuiltin 
             },
-            _ => Command{ name: "", variant: CmdVariant::Invalid, r#type: CommandType::Invalid }
+            _ => Command{ name: command, variant: CmdVariant::Invalid, r#type: CommandType::Invalid }
         }
     }
 }
