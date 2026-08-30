@@ -15,14 +15,12 @@ fn main() {
         io::stdin().read_line(&mut input).expect("Input error. Exiting");
         let input = input.trim();
 
-        let single_quotes_count = input.chars().filter(|c| *c == '\'').count();
-
-        if single_quotes_count % 2 == 1{
+        if !check_quotes_parity(input){
             println!("Missing closing quote");
             continue;
         }
 
-        let input = remove_extra_spaces_outside_single_quotes(input);
+        let input = remove_extra_spaces_outside_quotes(input);
 
         let (command_name, rest) = split_prompt(&input);
 
@@ -42,7 +40,7 @@ fn main() {
 
         match command.unwrap(){
             Command::Exit => return,
-            Command::Echo(text) => { println!("{}", text.replace('\'', "")) }
+            Command::Echo(text) => { println!("{}", remove_quotes(text)) }
             Command::Type(checked) => { handle_type_command(checked); }
             Command::Pwd => println!("{}", env::current_dir().unwrap().display()),
             Command::Cd(path) => {
@@ -60,25 +58,70 @@ fn main() {
     }
 }
 
+fn check_quotes_parity(string: &str) -> bool{
+    let mut single_quote = false;
+    let mut double_quote = false;
 
-fn remove_extra_spaces_outside_single_quotes(string: &str) -> String{
-    let mut is_inside_quotes = false;
+    for c in string.chars(){
+        if c == '"' && !single_quote{
+            double_quote = !double_quote;
+        }
+
+        if c == '\'' && !double_quote{
+            single_quote = !single_quote;
+        }
+    }
+
+    !single_quote && !double_quote
+}
+
+fn remove_extra_spaces_outside_quotes(string: &str) -> String{
+    let mut in_single_quotes = false;
+    let mut in_double_quotes = false;
     let mut last_was_space = false;
 
     let mut result = String::with_capacity(string.len());
 
     for c in string.chars(){
-        if c == '\''{
-            is_inside_quotes = !is_inside_quotes;
+        if c == '"' && !in_single_quotes{
+            in_double_quotes = !in_double_quotes;
+        }
+
+        if c == '\'' && !in_double_quotes{
+            in_single_quotes = !in_single_quotes;
         }
 
         let is_space = c == ' ';
+        let in_quotes = in_single_quotes || in_double_quotes;
 
-        if is_inside_quotes || !last_was_space || !is_space{
+        if in_quotes || !last_was_space || !is_space{
             result.push(c);
         }
 
-        last_was_space = !is_inside_quotes && is_space;
+        last_was_space = !in_single_quotes && is_space;
+    }
+
+    result
+}
+
+fn remove_quotes(string: &str) -> String{
+    let mut in_single_quotes = false;
+    let mut in_double_quotes = false;
+
+    let mut result = String::with_capacity(string.len());
+
+    for c in string.chars(){
+        if c == '"' && !in_single_quotes{
+            in_double_quotes = !in_double_quotes;
+            continue;
+        }
+
+        if c == '\'' && !in_double_quotes{
+            in_single_quotes = !in_single_quotes;
+            continue;
+        }
+
+        result.push(c);
     }
 
     result
@@ -134,7 +177,8 @@ fn find_in_env_path(file: &str) -> Option<String>{
 }
 
 fn handle_type_command(checked_cmd: &str){
-    let (cmd_name, _) = split_prompt(checked_cmd);
+    let checked_cmd = remove_quotes(checked_cmd);
+    let (cmd_name, _) = split_prompt(&checked_cmd);
     let command = Command::from(cmd_name, "");
 
     if command.is_none(){
@@ -166,17 +210,42 @@ fn execute_process(filepath: &str, args: &str) -> Result<process::ExitStatus, st
 }
 
 fn split_command_args(args: &str) -> Vec<&str>{
+    let mut args = args;
     let mut result = Vec::<&str>::new();
-    let mut iter = args.split('\'');
 
-    while let Some(part) = iter.next(){
-        for part in part.split(' ').filter(|&p| !p.is_empty()){
-            result.push(part);
-        }
-        if let Some(next_part) = iter.next(){
-            result.push(next_part);
+    while !args.is_empty() {
+        for (idx, c) in args.char_indices(){
+            match c{
+                quote @ ('\'' | '"') => {
+                    args = &args[idx..];
+                    let opening_quote_pos = 0;
+
+                    let closing_quote_pos = args[(opening_quote_pos + 1)..].find(quote).unwrap() + 1;
+
+                    result.push(&args[(opening_quote_pos + 1)..=(closing_quote_pos - 1)]);
+
+                    args = &args[(closing_quote_pos + 1)..];
+                    break;
+                },
+                ' ' => {
+                    if idx == 0{
+                        args = &args[1..];
+                        break;
+                    }
+                    
+                    result.push(&args[0..idx]);
+                    args = &args[(idx + 1)..];
+                    break;
+                },
+                _ => {
+                    if idx == args.chars().count() - 1{
+                        result.push(args);
+                        args = "";
+                        break;
+                    }
+                }
+            }
         }
     }
-
     result
 }
