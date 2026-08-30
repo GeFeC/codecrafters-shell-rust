@@ -25,6 +25,7 @@ fn main() {
         let input = remove_extra_spaces_outside_single_quotes(input);
 
         let (command_name, rest) = split_prompt(&input);
+
         let command = Command::from(command_name, rest);
 
         if command.is_none(){
@@ -41,7 +42,7 @@ fn main() {
 
         match command.unwrap(){
             Command::Exit => return,
-            Command::Echo(text) => { println!("{}", text) }
+            Command::Echo(text) => { println!("{}", text.replace('\'', "")) }
             Command::Type(checked) => { handle_type_command(checked); }
             Command::Pwd => println!("{}", env::current_dir().unwrap().display()),
             Command::Cd(path) => {
@@ -69,7 +70,6 @@ fn remove_extra_spaces_outside_single_quotes(string: &str) -> String{
     for c in string.chars(){
         if c == '\''{
             is_inside_quotes = !is_inside_quotes;
-            continue;
         }
 
         let is_space = c == ' ';
@@ -158,9 +158,25 @@ fn execute_process(filepath: &str, args: &str) -> Result<process::ExitStatus, st
     let cmd_result = match args{
         "" => command.spawn(),
         _ => command 
-            .args(args.split(' ').collect::<Vec<_>>())
+            .args(split_command_args(args))
             .spawn()
     };
 
     cmd_result?.wait()
+}
+
+fn split_command_args(args: &str) -> Vec<&str>{
+    let mut result = Vec::<&str>::new();
+    let mut iter = args.split('\'');
+
+    while let Some(part) = iter.next(){
+        for part in part.split(' ').filter(|&p| !p.is_empty()){
+            result.push(part);
+        }
+        if let Some(next_part) = iter.next(){
+            result.push(next_part);
+        }
+    }
+
+    result
 }
