@@ -6,6 +6,84 @@ use is_executable::is_executable;
 use std::process;
 use std::path::Path;
 
+fn main() {
+    loop{
+        print!("$ ");
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).expect("Input error. Exiting");
+        let input = input.trim();
+
+        let single_quotes_count = input.chars().filter(|c| *c == '\'').count();
+
+        if single_quotes_count % 2 == 1{
+            println!("Missing closing quote");
+            continue;
+        }
+
+        let input = remove_extra_spaces_outside_single_quotes(input);
+
+        let (command_name, rest) = split_prompt(&input);
+        let command = Command::from(command_name, rest);
+
+        if command.is_none(){
+            if find_in_env_path(command_name).is_some(){
+                if let Err(err) = execute_process(command_name, rest){
+                    eprintln!("Failed to execute the process: {}", err);
+                }
+                continue;
+            }
+
+            println!("{}: command not found", command_name);
+            continue;
+        }
+
+        match command.unwrap(){
+            Command::Exit => return,
+            Command::Echo(text) => { println!("{}", text) }
+            Command::Type(checked) => { handle_type_command(checked); }
+            Command::Pwd => println!("{}", env::current_dir().unwrap().display()),
+            Command::Cd(path) => {
+                let home_dir = env::home_dir();
+
+                let path = match path{
+                    "~" | "" => home_dir.as_deref().and_then(Path::to_str).unwrap_or("~"),
+                    _ => path
+                };
+
+                env::set_current_dir(path)
+                    .unwrap_or_else(|_| println!("cd: {}: No such file or directory", path));
+            }
+        }
+    }
+}
+
+
+fn remove_extra_spaces_outside_single_quotes(string: &str) -> String{
+    let mut is_inside_quotes = false;
+    let mut last_was_space = false;
+
+    let mut result = String::with_capacity(string.len());
+
+    for c in string.chars(){
+        if c == '\''{
+            is_inside_quotes = !is_inside_quotes;
+            continue;
+        }
+
+        let is_space = c == ' ';
+
+        if is_inside_quotes || !last_was_space || !is_space{
+            result.push(c);
+        }
+
+        last_was_space = !is_inside_quotes && is_space;
+    }
+
+    result
+}
+
 enum Command<'a>{
     Exit,
     Pwd,
@@ -85,57 +163,4 @@ fn execute_process(filepath: &str, args: &str) -> Result<process::ExitStatus, st
     };
 
     cmd_result?.wait()
-}
-
-fn main() {
-    loop{
-        print!("$ ");
-        io::stdout().flush().unwrap();
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).expect("Input error. Exiting");
-        let input = input.trim();
-
-        let single_quotes_count = input.chars().filter(|c| *c == '\'').count();
-
-        if single_quotes_count % 2 == 1{
-            println!("Missing closing quote");
-            continue;
-        }
-
-        let input = input.replace('\'', "");
-
-        let (command_name, rest) = split_prompt(&input);
-        let command = Command::from(command_name, rest);
-
-        if command.is_none(){
-            if find_in_env_path(command_name).is_some(){
-                if let Err(err) = execute_process(command_name, rest){
-                    eprintln!("Failed to execute the process: {}", err);
-                }
-                continue;
-            }
-
-            println!("{}: command not found", command_name);
-            continue;
-        }
-
-        match command.unwrap(){
-            Command::Exit => return,
-            Command::Echo(text) => { println!("{}", text) }
-            Command::Type(checked) => { handle_type_command(checked); }
-            Command::Pwd => println!("{}", env::current_dir().unwrap().display()),
-            Command::Cd(path) => {
-                let home_dir = env::home_dir();
-
-                let path = match path{
-                    "~" | "" => home_dir.as_deref().and_then(Path::to_str).unwrap_or("~"),
-                    _ => path
-                };
-
-                env::set_current_dir(path)
-                    .unwrap_or_else(|_| println!("cd: {}: No such file or directory", path));
-            }
-        }
-    }
 }
