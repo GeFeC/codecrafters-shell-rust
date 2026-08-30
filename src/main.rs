@@ -5,40 +5,20 @@ use std::fs;
 use is_executable::is_executable;
 use std::process;
 
-enum CommandType{
-    ShellBuiltin
-}
-
-enum CmdVariant<'a>{
+enum Command<'a>{
     Exit,
+    Pwd,
     Echo(&'a str),
     Type(&'a str)
-}
-
-struct Command<'a>{
-    name: &'a str,
-    variant: CmdVariant<'a>,
-    r#type: CommandType
 }
 
 impl Command<'_>{
     fn from<'a>(command: &'a str, rest: &'a str) -> Option<Command<'a>>{
         match command{
-            "exit" => Some(Command{ 
-                name: command, 
-                variant: CmdVariant::Exit, 
-                r#type: CommandType::ShellBuiltin 
-            }),
-            "echo" => Some(Command{ 
-                name: command, 
-                variant: CmdVariant::Echo(rest), 
-                r#type: CommandType::ShellBuiltin 
-            }),
-            "type" => Some(Command{ 
-                name: command, 
-                variant: CmdVariant::Type(rest), 
-                r#type: CommandType::ShellBuiltin 
-            }),
+            "exit" => Some(Command::Exit),
+            "echo" => Some(Command::Echo(rest)),
+            "type" => Some(Command::Type(rest)),
+            "pwd" => Some(Command::Pwd),
             _ => None
         }
     }
@@ -89,11 +69,7 @@ fn handle_type_command(checked_cmd: &str){
         return;
     }
 
-    match command.unwrap().r#type{
-        CommandType::ShellBuiltin => {
-            println!("{} is a shell builtin", cmd_name);
-        }
-    }
+    println!("{} is a shell builtin", cmd_name);
 }
 
 fn execute_process(filepath: &str, args: &str) -> Result<process::ExitStatus, std::io::Error>{
@@ -109,6 +85,11 @@ fn execute_process(filepath: &str, args: &str) -> Result<process::ExitStatus, st
 }
 
 fn main() {
+    let working_directory = std::env::current_dir()
+        .expect("Error: Could not get working directory");
+
+    let working_directory = working_directory.to_str().unwrap();
+
     loop{
         print!("$ ");
         io::stdout().flush().unwrap();
@@ -132,10 +113,11 @@ fn main() {
             continue;
         }
 
-        match command.unwrap().variant{
-            CmdVariant::Exit => return,
-            CmdVariant::Echo(text) => { println!("{}", text) }
-            CmdVariant::Type(checked) => { handle_type_command(checked); }
+        match command.unwrap(){
+            Command::Exit => return,
+            Command::Echo(text) => { println!("{}", text) }
+            Command::Type(checked) => { handle_type_command(checked); }
+            Command::Pwd => println!("{}", working_directory)
         }
     }
 }
