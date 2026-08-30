@@ -96,7 +96,16 @@ fn main() {
         io::stdin().read_line(&mut input).expect("Input error. Exiting");
         let input = input.trim();
 
-        let (command_name, rest) = split_prompt(input);
+        let single_quotes_count = input.chars().filter(|c| *c == '\'').count();
+
+        if single_quotes_count % 2 == 1{
+            println!("Missing closing quote");
+            continue;
+        }
+
+        let input = input.replace('\'', "");
+
+        let (command_name, rest) = split_prompt(&input);
         let command = Command::from(command_name, rest);
 
         if command.is_none(){
