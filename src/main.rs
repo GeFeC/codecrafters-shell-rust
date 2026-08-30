@@ -9,7 +9,8 @@ enum Command<'a>{
     Exit,
     Pwd,
     Echo(&'a str),
-    Type(&'a str)
+    Type(&'a str),
+    Cd(&'a str)
 }
 
 impl Command<'_>{
@@ -19,6 +20,7 @@ impl Command<'_>{
             "echo" => Some(Command::Echo(rest)),
             "type" => Some(Command::Type(rest)),
             "pwd" => Some(Command::Pwd),
+            "cd" => Some(Command::Cd(rest)),
             _ => None
         }
     }
@@ -85,11 +87,6 @@ fn execute_process(filepath: &str, args: &str) -> Result<process::ExitStatus, st
 }
 
 fn main() {
-    let working_directory = std::env::current_dir()
-        .expect("Error: Could not get working directory");
-
-    let working_directory = working_directory.to_str().unwrap();
-
     loop{
         print!("$ ");
         io::stdout().flush().unwrap();
@@ -117,7 +114,11 @@ fn main() {
             Command::Exit => return,
             Command::Echo(text) => { println!("{}", text) }
             Command::Type(checked) => { handle_type_command(checked); }
-            Command::Pwd => println!("{}", working_directory)
+            Command::Pwd => println!("{}", env::current_dir().unwrap().display()),
+            Command::Cd(path) => {
+                env::set_current_dir(path)
+                    .unwrap_or_else(|_| println!("cd: {}: No such file or directory", path));
+            }
         }
     }
 }
