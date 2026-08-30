@@ -4,6 +4,7 @@ use std::env;
 use std::fs;
 use is_executable::is_executable;
 use std::process;
+use std::path::Path;
 
 enum Command<'a>{
     Exit,
@@ -116,15 +117,14 @@ fn main() {
             Command::Type(checked) => { handle_type_command(checked); }
             Command::Pwd => println!("{}", env::current_dir().unwrap().display()),
             Command::Cd(path) => {
+                let home_dir = env::home_dir();
+
                 let path = match path{
-                    "~" | "" => match env::home_dir(){
-                        Some(home) => home.to_str().unwrap().to_owned(),
-                        None => String::from("~")
-                    },
-                    _ => String::from(path)
+                    "~" | "" => home_dir.as_deref().and_then(Path::to_str).unwrap_or("~"),
+                    _ => path
                 };
 
-                env::set_current_dir(&path)
+                env::set_current_dir(path)
                     .unwrap_or_else(|_| println!("cd: {}: No such file or directory", path));
             }
         }
