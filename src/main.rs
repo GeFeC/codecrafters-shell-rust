@@ -121,8 +121,8 @@ fn main() {
         let command = Command::from(command_name, rest);
 
         if command.is_none(){
-            if let Some(filepath) = find_in_env_path(command_name){
-                if let Err(err) = execute_process(&filepath, rest){
+            if find_in_env_path(command_name).is_some(){
+                if let Err(err) = execute_process(command_name, rest){
                     eprintln!("Failed to execute the process: {}", err);
                 }
                 continue;
