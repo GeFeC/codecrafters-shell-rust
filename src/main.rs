@@ -115,7 +115,14 @@ fn main() {
             Command::Echo(text) => { println!("{}", text) }
             Command::Type(checked) => { handle_type_command(checked); }
             Command::Pwd => println!("{}", env::current_dir().unwrap().display()),
-            Command::Cd(path) => {
+            Command::Cd(mut path) => {
+                if path == "~"{
+                    path = match env::home_dir(){
+                        Some(home) => home.to_str().unwrap(),
+                        None => "~"
+                    }
+                }
+
                 env::set_current_dir(path)
                     .unwrap_or_else(|_| println!("cd: {}: No such file or directory", path));
             }
