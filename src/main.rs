@@ -3,6 +3,7 @@ use std::io::{self, Write};
 use std::env;
 use std::fs;
 use is_executable::is_executable;
+use std::process;
 
 enum CommandType{
     ShellBuiltin
@@ -44,7 +45,9 @@ impl Command<'_>{
 }
 
 fn split_prompt(prompt: &str) -> (&str, &str){
-    prompt.split_once(' ').unwrap_or((prompt, ""))
+    prompt
+        .split_once(' ')
+        .unwrap_or((prompt, ""))
 }
 
 fn find_in_env_path(file: &str) -> Option<String>{
@@ -93,17 +96,38 @@ fn handle_type_command(checked_cmd: &str){
     }
 }
 
+fn execute_process(filepath: &str, args: &str) -> Result<process::ExitStatus, std::io::Error>{
+    let mut command = process::Command::new(filepath);
+    let cmd_result = match args{
+        "" => command.spawn(),
+        _ => command 
+            .args(args.split(' ').collect::<Vec<_>>())
+            .spawn()
+    };
+
+    cmd_result?.wait()
+}
+
 fn main() {
     loop{
         print!("$ ");
         io::stdout().flush().unwrap();
+
         let mut input = String::new();
         io::stdin().read_line(&mut input).expect("Input error. Exiting");
         let input = input.trim();
+
         let (command_name, rest) = split_prompt(input);
         let command = Command::from(command_name, rest);
 
         if command.is_none(){
+            if let Some(filepath) = find_in_env_path(command_name){
+                if let Err(err) = execute_process(&filepath, rest){
+                    eprintln!("Failed to execute the process: {}", err);
+                }
+                continue;
+            }
+
             println!("{}: command not found", command_name);
             continue;
         }
