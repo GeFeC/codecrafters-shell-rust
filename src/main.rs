@@ -23,8 +23,9 @@ fn main() {
         let input = remove_extra_spaces_outside_quotes(input);
 
         let (command_name, rest) = split_prompt(&input);
+        let command_args = split_command_args(rest);
 
-        let command = Command::from(command_name, rest);
+        let command = Command::from(command_name, &command_args);
 
         if command.is_none(){
             if find_in_env_path(command_name).is_some(){
@@ -40,18 +41,19 @@ fn main() {
 
         match command.unwrap(){
             Command::Exit => return,
-            Command::Echo(text) => { println!("{}", remove_quotes(text)) }
+            Command::Echo(text) => { println!("{}", text.join(" ")) }
             Command::Type(checked) => { handle_type_command(checked); }
             Command::Pwd => println!("{}", env::current_dir().unwrap().display()),
             Command::Cd(path) => {
                 let home_dir = env::home_dir();
 
-                let path = match path{
-                    "~" | "" => home_dir.as_deref().and_then(Path::to_str).unwrap_or("~"),
+                let path = path.join(" ");
+                let path = match path.as_str(){
+                    "~" | "" => home_dir.as_deref().and_then(Path::to_str).unwrap_or("~").to_owned(),
                     _ => path
                 };
 
-                env::set_current_dir(path)
+                env::set_current_dir(&path)
                     .unwrap_or_else(|_| println!("cd: {}: No such file or directory", path));
             }
         }
@@ -104,39 +106,18 @@ fn remove_extra_spaces_outside_quotes(string: &str) -> String{
     result
 }
 
-fn remove_quotes(string: &str) -> String{
-    let mut in_single_quotes = false;
-    let mut in_double_quotes = false;
-
-    let mut result = String::with_capacity(string.len());
-
-    for c in string.chars(){
-        if c == '"' && !in_single_quotes{
-            in_double_quotes = !in_double_quotes;
-            continue;
-        }
-
-        if c == '\'' && !in_double_quotes{
-            in_single_quotes = !in_single_quotes;
-            continue;
-        }
-
-        result.push(c);
-    }
-
-    result
-}
+type CommandArgs<'a> = &'a[&'a str];
 
 enum Command<'a>{
     Exit,
     Pwd,
-    Echo(&'a str),
-    Type(&'a str),
-    Cd(&'a str)
+    Echo(CommandArgs<'a>),
+    Type(CommandArgs<'a>),
+    Cd(CommandArgs<'a>)
 }
 
 impl Command<'_>{
-    fn from<'a>(command: &'a str, rest: &'a str) -> Option<Command<'a>>{
+    fn from<'a>(command: &'a str, rest: CommandArgs<'a>) -> Option<Command<'a>>{
         match command{
             "exit" => Some(Command::Exit),
             "echo" => Some(Command::Echo(rest)),
@@ -176,10 +157,14 @@ fn find_in_env_path(file: &str) -> Option<String>{
     None
 }
 
-fn handle_type_command(checked_cmd: &str){
-    let checked_cmd = remove_quotes(checked_cmd);
-    let (cmd_name, _) = split_prompt(&checked_cmd);
-    let command = Command::from(cmd_name, "");
+fn handle_type_command(checked_cmd: CommandArgs){
+    if checked_cmd.len() != 1{
+        println!("Usage: type <command name without args>");
+        return;
+    }
+
+    let cmd_name = checked_cmd.first().unwrap();
+    let command = Command::from(cmd_name, &[]);
 
     if command.is_none(){
         let executable_path = find_in_env_path(cmd_name);
