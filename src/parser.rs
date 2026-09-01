@@ -7,7 +7,14 @@ pub fn split_command(args: &str) -> Option<command::CommandArgsStorage>{
     let mut in_single_quotes = false;
     let mut in_double_quotes = false;
 
-    for c in args.chars(){
+    let mut iter = args.chars();
+
+    while let Some(c) = iter.next(){
+        if c == '\\' && let Some(c) = iter.next(){
+            arg.push(c);
+            continue;
+        }
+
         if c == '"' && !in_single_quotes{
             in_double_quotes = !in_double_quotes;
             continue;
@@ -73,13 +80,28 @@ mod tests{
     }
 
     #[test]
-    fn test_commands_splitting(){
+    fn test_commands_with_quotes(){
         let cases = [
             ("'hello   world'", vec!["hello   world"]),
             ("hello   world", vec!["hello", "world"]),
             ("'hello''world'", vec!["helloworld"]),
             ("hello''world", vec!["helloworld"]),
             ("hello\"\"world    ", vec!["helloworld"])
+        ];
+
+        for (case, expected) in cases{
+            assert_eq!(split_command(case).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_commands_with_escape_character(){
+        let cases = [
+            ("three\\ \\ \\ spaces", vec!["three   spaces"]),
+            ("before\\    after", vec!["before ", "after"]),
+            ("test\\nexample", vec!["testnexample"]),
+            ("hello\\\\world", vec!["hello\\world"]),
+            ("\\'hello\\'", vec!["'hello'"]),
         ];
 
         for (case, expected) in cases{
