@@ -97,11 +97,11 @@ mod tests{
     #[test]
     fn test_escape_character(){
         let cases = [
-            ("three\\ \\ \\ spaces", vec!["three   spaces"]),
-            ("before\\    after", vec!["before ", "after"]),
-            ("test\\nexample", vec!["testnexample"]),
-            ("hello\\\\world", vec!["hello\\world"]),
-            ("\\'hello\\'", vec!["'hello'"]),
+            (r#"three\ \ \ spaces"#, vec!["three   spaces"]),
+            (r#"before\    after"#, vec!["before ", "after"]),
+            (r#"test\nexample"#, vec!["testnexample"]),
+            (r#"hello\\world"#, vec![r#"hello\world"#]),
+            (r#"\'hello\'"#, vec!["'hello'"]),
         ];
 
         for (case, expected) in cases{
@@ -112,8 +112,8 @@ mod tests{
     #[test]
     fn test_escape_character_inside_single_quotes(){
         let cases = [
-            ("'shell\\\\\\nscript'", vec!["shell\\\\\\nscript"]),
-            ("'every\\\"thing_is\\\"literal'", vec!["every\\\"thing_is\\\"literal"]),
+            (r#"'shell\\\nscript'"#, vec![r#"shell\\\nscript"#]),
+            (r#"'every\"thing_is\"literal'"#, vec![r#"every\"thing_is\"literal"#]),
         ];
 
         for (case, expected) in cases{
