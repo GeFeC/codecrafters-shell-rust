@@ -18,17 +18,20 @@ fn main() {
         io::stdin().read_line(&mut input).expect("Input error. Exiting");
         let input = input.trim();
 
-        let input = parser::remove_extra_spaces_outside_quotes(input);
-        if input.is_none(){
+        if input.is_empty(){
+            continue;
+        }
+
+        let command = parser::split_command(input);
+
+        if command.is_none(){
             println!("Missing closing quote");
             continue;
         }
 
-        let input = input.unwrap();
-
-        let command = parser::split_command(&input);
+        let command = command.unwrap();
         let command_name = command.first().unwrap();
-        let command_args = &command[1..];
+        let command_args = &command[1..].iter().map(|s| s.as_str()).collect::<Vec<_>>();
 
         let command = Command::from(command_name, command_args);
 
@@ -45,7 +48,7 @@ fn main() {
     }
 }
 
-fn execute_process(executable: &str, args: CommandArgs) -> Option<Result<process::ExitStatus, std::io::Error>>{
+fn execute_process(executable: &str, args: &CommandArgs) -> Option<Result<process::ExitStatus, std::io::Error>>{
     env::find_in_path(executable).as_ref()?;
 
     let mut command = process::Command::new(executable);

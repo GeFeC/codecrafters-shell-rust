@@ -1,18 +1,18 @@
 use crate::commands_execution;
 
-pub type CommandArgs<'a> = &'a[&'a str];
-pub type CommandArgsStorage<'a> = Vec<&'a str>;
+pub type CommandArgs<'a> = Vec<&'a str>;
+pub type CommandArgsStorage = Vec<String>;
 
 pub enum Command<'a>{
     Exit,
     Pwd,
-    Echo(CommandArgs<'a>),
-    Type(CommandArgs<'a>),
-    Cd(CommandArgs<'a>)
+    Echo(&'a CommandArgs<'a>),
+    Type(&'a CommandArgs<'a>),
+    Cd(&'a CommandArgs<'a>)
 }
 
 impl Command<'_>{
-    pub fn from<'a>(command: &'a str, rest: CommandArgs<'a>) -> Option<Command<'a>>{
+    pub fn from<'a>(command: &'a str, rest: &'a CommandArgs<'a>) -> Option<Command<'a>>{
         match command{
             "exit" => Some(Command::Exit),
             "echo" => Some(Command::Echo(rest)),

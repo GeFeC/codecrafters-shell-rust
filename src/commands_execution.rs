@@ -2,7 +2,7 @@ use crate::command::{Command, CommandArgs};
 use std::env;
 use std::path::Path;
 
-pub fn execute_echo(args: CommandArgs){
+pub fn execute_echo(args: &CommandArgs){
     println!("{}", args.join(" "));
 }
 
@@ -10,7 +10,7 @@ pub fn execute_pwd(){
     println!("{}", env::current_dir().unwrap().display());
 }
 
-pub fn execute_cd(args: CommandArgs){
+pub fn execute_cd(args: &CommandArgs){
     let home_dir = env::home_dir();
 
     let path = args.join(" ");
@@ -23,14 +23,15 @@ pub fn execute_cd(args: CommandArgs){
         .unwrap_or_else(|_| println!("cd: {}: No such file or directory", path));
 }
 
-pub fn execute_type(checked_cmd: CommandArgs){
+pub fn execute_type(checked_cmd: &CommandArgs){
     if checked_cmd.len() != 1{
         println!("Usage: type <command name without args>");
         return;
     }
 
     let cmd_name = checked_cmd.first().unwrap();
-    let command = Command::from(cmd_name, &[]);
+    let empty_args = vec![];
+    let command = Command::from(cmd_name, &empty_args);
 
     if command.is_none(){
         let executable_path = crate::env::find_in_path(cmd_name);

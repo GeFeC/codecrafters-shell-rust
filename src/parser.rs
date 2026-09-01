@@ -1,76 +1,89 @@
 use crate::command;
 
-//Returns None if quotes parity isn't met
-pub fn remove_extra_spaces_outside_quotes(string: &str) -> Option<String>{ 
+pub fn split_command(args: &str) -> Option<command::CommandArgsStorage>{
+    let mut result = command::CommandArgsStorage::new();
+
+    let mut arg = String::with_capacity(args.len());
     let mut in_single_quotes = false;
     let mut in_double_quotes = false;
-    let mut last_was_space = false;
-    let mut result = String::with_capacity(string.len());
 
-    for c in string.chars(){
+    for c in args.chars(){
         if c == '"' && !in_single_quotes{
             in_double_quotes = !in_double_quotes;
+            continue;
         }
 
         if c == '\'' && !in_double_quotes{
             in_single_quotes = !in_single_quotes;
+            continue;
         }
 
-        let is_space = c == ' ';
         let in_quotes = in_single_quotes || in_double_quotes;
 
-        if in_quotes || !last_was_space || !is_space{
-            result.push(c);
-        }
-
-        last_was_space = !in_quotes && is_space;
-    }
-
-    if !in_single_quotes && !in_double_quotes{
-        return Some(result);
-    }
-
-    None
-}
-
-pub fn split_command<'a>(args: &'a str) -> command::CommandArgsStorage<'a>{
-    let mut args = args;
-    let mut result = Vec::<&str>::new();
-
-    while !args.is_empty() {
-        for (idx, c) in args.char_indices(){
-            match c{
-                quote @ ('\'' | '"') => {
-                    args = &args[idx..];
-                    let opening_quote_pos = 0;
-
-                    let closing_quote_pos = args[(opening_quote_pos + 1)..].find(quote).unwrap() + 1;
-
-                    result.push(&args[(opening_quote_pos + 1)..=(closing_quote_pos - 1)]);
-
-                    args = &args[(closing_quote_pos + 1)..];
-                    break;
-                },
-                ' ' => {
-                    if idx == 0{
-                        args = &args[1..];
-                        break;
-                    }
-                    
-                    result.push(&args[0..idx]);
-                    args = &args[(idx + 1)..];
-                    break;
-                },
-                _ => {
-                    if idx == args.chars().count() - 1{
-                        result.push(args);
-                        args = "";
-                        break;
-                    }
-                }
+        if c == ' ' && !in_quotes{
+            if !arg.is_empty(){
+                result.push(arg);
+                arg = "".to_string();
             }
+            continue;
         }
+
+        arg.push(c);
     }
-    result
+
+    if in_single_quotes || in_double_quotes{
+        return None;
+    }
+
+    if !arg.is_empty(){
+        result.push(arg);
+    }
+
+    Some(result)
 }
 
+#[cfg(test)]
+mod tests{
+    use super::*;
+
+    #[test]
+    fn test_missing_closing_quote(){
+        assert!(split_command("\"hello world").is_none());
+        assert!(split_command("\'hello world").is_none());
+        assert!(split_command("\"shell's test\"").is_some());
+        assert!(split_command("'shell\"s test'").is_some());
+    }
+
+    #[test]
+    fn test_extra_spaces_deletion(){
+        let cases = [
+            ("hello   world", "hello world"),
+            ("\"hello   world\"", "hello   world"),
+            ("'hello   world'    hello   world", "hello   world hello world"),
+            ("  hello   \"hello   world\"     world", "hello hello   world world"),
+        ];
+
+        for (case, expected) in cases{
+            let got = split_command(case);
+            assert!(got.is_some());
+            let got = got.unwrap().join(" ");
+
+            assert_eq!(got, expected);
+        }
+    }
+
+    #[test]
+    fn test_commands_splitting(){
+        let cases = [
+            ("'hello   world'", vec!["hello   world"]),
+            ("hello   world", vec!["hello", "world"]),
+            ("'hello''world'", vec!["helloworld"]),
+            ("hello''world", vec!["helloworld"]),
+            ("hello\"\"world    ", vec!["helloworld"])
+        ];
+
+        for (case, expected) in cases{
+            assert_eq!(split_command(case).unwrap(), expected);
+        }
+    }
+}
