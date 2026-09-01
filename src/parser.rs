@@ -11,6 +11,15 @@ pub fn split_command(args: &str) -> Option<command::CommandArgsStorage>{
 
     while let Some(c) = iter.next(){
         if c == '\\' && !in_single_quotes && let Some(c) = iter.next(){
+            let should_escape = !in_double_quotes || 
+                (in_double_quotes && ['"', '\\', '$', '`', '\n'].contains(&c));
+
+            if should_escape{
+                arg.push(c);
+                continue;
+            }
+
+            arg.push('\\');
             arg.push(c);
             continue;
         }
@@ -114,6 +123,19 @@ mod tests{
         let cases = [
             (r#"'shell\\\nscript'"#, vec![r#"shell\\\nscript"#]),
             (r#"'every\"thing_is\"literal'"#, vec![r#"every\"thing_is\"literal"#]),
+        ];
+
+        for (case, expected) in cases{
+            assert_eq!(split_command(case).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_escape_character_inside_double_quotes(){
+        let cases = [
+            (r#""A \\ escapes itself""#, vec![r#"A \ escapes itself"#]),
+            (r#""A \" inside double quotes""#, vec![r#"A " inside double quotes"#]),
+            (r#""hello\ ""#, vec![r#"hello\ "#])
         ];
 
         for (case, expected) in cases{
