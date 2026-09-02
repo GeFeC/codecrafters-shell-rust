@@ -157,7 +157,7 @@ impl Command{
 
         let file = File::create(file).and_then(|mut f| {
             f.write_all(out.as_bytes())?;
-            if !out.ends_with("\n"){
+            if !out.is_empty() && !out.ends_with("\n"){
                 f.write_all(b"\n")
             }
             else{
