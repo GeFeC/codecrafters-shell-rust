@@ -1,38 +1,149 @@
 use crate::commands_execution;
+use crate::env;
+use crate::lexer;
+use std::fs::File;
+use std::io::Write;
 
-pub type CommandArgs<'a> = Vec<&'a str>;
-pub type CommandArgsStorage = Vec<String>;
+pub type CommandArgs = Vec<String>;
 
-pub enum Command<'a>{
-    Exit,
-    Pwd,
-    Echo(&'a CommandArgs<'a>),
-    Type(&'a CommandArgs<'a>),
-    Cd(&'a CommandArgs<'a>)
+pub struct Command{
+    r#type: Type,
+    redirection: Redirection
 }
 
-impl Command<'_>{
-    pub fn from<'a>(command: &'a str, rest: &'a CommandArgs<'a>) -> Option<Command<'a>>{
+pub struct Redirection(Option<String>);
+
+pub enum OutputType{
+    Display,
+    Redirect
+}
+
+pub enum Type{
+    Exit,
+    Pwd,
+    Echo(CommandArgs),
+    #[allow(clippy::enum_variant_names)]
+    Type(CommandArgs),
+    Cd(CommandArgs),
+    Executable{ name: String, args: CommandArgs }
+}
+
+impl Type{
+    pub fn from(command: &str, command_args: CommandArgs) -> Result<Type, String>{
         match command{
-            "exit" => Some(Command::Exit),
-            "echo" => Some(Command::Echo(rest)),
-            "type" => Some(Command::Type(rest)),
-            "pwd" => Some(Command::Pwd),
-            "cd" => Some(Command::Cd(rest)),
-            _ => None
+            "exit" => Ok(Type::Exit),
+            "echo" => Ok(Type::Echo(command_args)),
+            "type" => Ok(Type::Type(command_args)),
+            "pwd" => Ok(Type::Pwd),
+            "cd" => Ok(Type::Cd(command_args)),
+            _ if env::find_in_path(command).is_some() => Ok(Type::Executable{
+                name: command.to_owned(),
+                args: command_args
+            }),
+            _ => Err(format!("{}: command not found", command))
         }
+    }
+}
+
+impl Command{
+    pub fn from_str(command: &str) -> Result<Command, String>{
+        let command = lexer::split_command(command);
+        if command.is_none(){
+            return Err(String::from("Missing closing quote"));
+        }
+
+        let command = command.unwrap();
+        let command_name = command.first().unwrap().as_str();
+        let command_args = command[1..].to_owned();
+
+        let (command_args, redirection) = match command_args.iter().position(|e| e == ">"){
+            Some(idx) => {
+                let (new_cmd_args, target_file) = command_args.split_at(idx);
+                let target_file = &target_file[1..];
+
+                let redirection = if target_file.is_empty(){
+                    None
+                }
+                else{
+                    Some(target_file.join(" "))
+                };
+
+                (new_cmd_args, redirection)
+            },
+            None => (&command_args[..], None)
+            
+        };
+
+        let command_type = Type::from(command_name, command_args.to_vec())?;
+
+        Ok(Command{
+            r#type: command_type,
+            redirection: Redirection(redirection)
+        })
     }
 
     pub fn execute(self) -> ExecutionStatus{
-        match self{
-            Command::Exit => return ExecutionStatus::Exit,
-            Command::Echo(args) => commands_execution::execute_echo(args),
-            Command::Type(args) => commands_execution::execute_type(args),
-            Command::Pwd => commands_execution::execute_pwd(),
-            Command::Cd(args) => commands_execution::execute_cd(args),
+        if let Type::Exit = self.r#type{
+            return ExecutionStatus::Exit;
+        }
+
+        let Redirection(redirection) = self.redirection;
+
+        let output_type = match redirection{
+            Some(_) => OutputType::Redirect,
+            None => OutputType::Display
         };
 
+        let result = match self.r#type{
+            Type::Echo(args) => commands_execution::execute_echo(&args),
+            Type::Type(args) => commands_execution::execute_type(&args),
+            Type::Pwd => commands_execution::execute_pwd(),
+            Type::Cd(args) => commands_execution::execute_cd(&args),
+            Type::Executable{ name, args } => execute_process(&name, &args, output_type),
+            _ => String::new()
+        };
+
+        let result = result.trim();
+
+        match redirection{
+            Some(file) => {
+                let file = File::create(file).and_then(|mut f| {
+                    f.write_all(result.as_bytes())
+                });
+
+                if let Err(err) = file{
+                    println!("Unable to write to a file: {}", err);
+                }
+            },
+            None if !result.is_empty() => {
+                println!("{result}");
+            },
+            None => {}
+        }
+
         ExecutionStatus::Continue
+    }
+}
+
+fn execute_process(executable: &str, args: &CommandArgs, output_type: OutputType) -> String{
+    let mut command = std::process::Command::new(executable);
+    if !args.is_empty(){
+        command.args(args);
+    }
+
+    match output_type{
+        OutputType::Redirect => {
+            match command.output(){
+                Ok(output) => std::str::from_utf8(&output.stdout).unwrap().trim().to_string(),
+                Err(err) => format!("{err}")
+            }
+        },
+        OutputType::Display => {
+            match command.spawn().and_then(|mut c| c.wait()){
+                Ok(_) => { println!(); String::new() },
+                Err(err) => { println!("{err}"); String::new() }
+            }
+        }
     }
 }
 
@@ -50,3 +161,24 @@ impl ExecutionStatus{
     }
 }
 
+#[cfg(test)]
+mod test{
+    use super::*;
+    use tempfile::tempdir;
+    use std::fs;
+
+    #[test]
+    fn test_output_redirection(){
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("fruits.txt");
+        let expected_content = "apple banana orange";
+
+        let command = format!(r#"echo "{}" > {}"#, expected_content, file_path.display());
+        Command::from_str(&command).unwrap().execute();
+
+        assert!(file_path.exists(), "The file wasn't created");
+        let content = fs::read_to_string(&file_path).unwrap();
+
+        assert_eq!(content, expected_content);
+    }
+}

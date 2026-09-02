@@ -2,15 +2,15 @@ use crate::command::{Command, CommandArgs};
 use std::env;
 use std::path::Path;
 
-pub fn execute_echo(args: &CommandArgs){
-    println!("{}", args.join(" "));
+pub fn execute_echo(args: &CommandArgs) -> String{
+    args.join(" ").to_string()
 }
 
-pub fn execute_pwd(){
-    println!("{}", env::current_dir().unwrap().display());
+pub fn execute_pwd() -> String{
+    format!("{}", env::current_dir().unwrap().display())
 }
 
-pub fn execute_cd(args: &CommandArgs){
+pub fn execute_cd(args: &CommandArgs) -> String{
     let home_dir = env::home_dir();
 
     let path = args.join(" ");
@@ -19,34 +19,33 @@ pub fn execute_cd(args: &CommandArgs){
         _ => path
     };
 
-    env::set_current_dir(&path)
-        .unwrap_or_else(|_| println!("cd: {}: No such file or directory", path));
+    if env::set_current_dir(&path).is_err(){
+        return format!("cd: {}: No such file or directory", path);
+    }
+
+    String::new()
 }
 
-pub fn execute_type(checked_cmd: &CommandArgs){
+pub fn execute_type(checked_cmd: &CommandArgs) -> String{
     if checked_cmd.len() != 1{
-        println!("Usage: type <command name without args>");
-        return;
+        return String::from("Usage: type <command name without args>");
     }
 
     let cmd_name = checked_cmd.first().unwrap();
-    let empty_args = vec![];
-    let command = Command::from(cmd_name, &empty_args);
+    let command = Command::from_str(cmd_name);
 
-    if command.is_none(){
+    if command.is_err(){
         let executable_path = crate::env::find_in_path(cmd_name);
 
         match executable_path{
-            Some(path) => println!("{} is {}", cmd_name, path),
+            Some(path) => { return format!("{} is {}", cmd_name, path); },
             None => {
-                println!("{}: not found", cmd_name);
+                return format!("{}: not found", cmd_name);
             }
         }
-
-        return;
     }
 
-    println!("{} is a shell builtin", cmd_name);
+    format!("{} is a shell builtin", cmd_name)
 }
 
 

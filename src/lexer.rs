@@ -1,16 +1,17 @@
 use crate::command;
 
-pub fn split_command(args: &str) -> Option<command::CommandArgsStorage>{
-    let mut result = command::CommandArgsStorage::new();
+pub fn split_command(args: &str) -> Option<command::CommandArgs>{
+    let mut result = command::CommandArgs::new();
 
     let mut arg = String::with_capacity(args.len());
     let mut in_single_quotes = false;
     let mut in_double_quotes = false;
 
-    let mut iter = args.chars();
+    let mut iter = args.char_indices();
 
-    while let Some(c) = iter.next(){
-        if c == '\\' && !in_single_quotes && let Some(c) = iter.next(){
+    while let Some((idx, c)) = iter.next(){
+        //Backslash escape character:
+        if c == '\\' && !in_single_quotes && let Some((_, c)) = iter.next(){
             let should_escape = !in_double_quotes || 
                 (in_double_quotes && ['"', '\\', '$', '`', '\n'].contains(&c));
 
@@ -24,6 +25,7 @@ pub fn split_command(args: &str) -> Option<command::CommandArgsStorage>{
             continue;
         }
 
+        //Quotes state:
         if c == '"' && !in_single_quotes{
             in_double_quotes = !in_double_quotes;
             continue;
@@ -36,11 +38,30 @@ pub fn split_command(args: &str) -> Option<command::CommandArgsStorage>{
 
         let in_quotes = in_single_quotes || in_double_quotes;
 
-        if c == ' ' && !in_quotes{
+        //Splitting on space
+        if !in_quotes && c == ' '{
             if !arg.is_empty(){
                 result.push(arg);
                 arg = "".to_string();
             }
+            continue;
+        }
+
+        //Output redirection:
+        if !in_quotes && c == '>'{
+            let prev_two_characters = if idx >= 2{ 
+                &args[(idx - 2)..(idx)] 
+            } 
+            else { 
+                "" 
+            };
+
+            if prev_two_characters != " 1"{ //if got " 1>" leave only '>':
+                result.push(arg.clone());
+            }
+
+            result.push(String::from(">"));
+            arg = "".to_string();
             continue;
         }
 
@@ -136,6 +157,20 @@ mod tests{
             (r#""A \\ escapes itself""#, vec![r#"A \ escapes itself"#]),
             (r#""A \" inside double quotes""#, vec![r#"A " inside double quotes"#]),
             (r#""hello\ ""#, vec![r#"hello\ "#])
+        ];
+
+        for (case, expected) in cases{
+            assert_eq!(split_command(case).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_output_redirection(){
+        let cases = [
+            (r#"hello>world"#, vec!["hello", ">", "world"]),
+            (r#"hello1>world"#, vec!["hello1", ">", "world"]),
+            (r#"hello 1> world"#, vec!["hello", ">", "world"]),
+            (r#""hello > world""#, vec!["hello > world"]),
         ];
 
         for (case, expected) in cases{
