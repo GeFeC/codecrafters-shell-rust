@@ -13,6 +13,34 @@ pub struct Command{
 
 pub struct Redirection(Option<String>);
 
+pub struct Output{
+    pub stdout: String,
+    pub stderr: String
+}
+
+impl Output{
+    pub fn empty() -> Output{
+        Output{
+            stdout: String::new(),
+            stderr: String::new()
+        }
+    }
+
+    pub fn stdout(str: &str) -> Output{
+        Output{
+            stdout: str.to_owned(),
+            stderr: String::new()
+        }
+    }
+
+    pub fn stderr(str: &str) -> Output{
+        Output{
+            stderr: str.to_owned(),
+            stdout: String::new()
+        }
+    }
+}
+
 pub enum OutputType{
     Display,
     Redirect
@@ -99,53 +127,39 @@ impl Command{
             Type::Type(args) => commands_execution::execute_type(&args),
             Type::Pwd => commands_execution::execute_pwd(),
             Type::Cd(args) => commands_execution::execute_cd(&args),
-            Type::Executable{ name, args } => execute_process(&name, &args, output_type),
-            _ => String::new()
+            Type::Executable{ name, args } => commands_execution::execute_process(&name, &args, output_type),
+            _ => Output::empty()
         };
 
-        let result = result.trim();
+        let Output{ stdout, stderr } = result;
+
+        let stdout = stdout.trim();
 
         match redirection{
             Some(file) => {
                 let file = File::create(file).and_then(|mut f| {
-                    f.write_all(result.as_bytes())
+                    f.write_all(stdout.as_bytes())
                 });
 
                 if let Err(err) = file{
-                    println!("Unable to write to a file: {}", err);
+                    println!("Unable to write to file: {}", err);
                 }
             },
-            None if !result.is_empty() => {
-                println!("{result}");
+            None if !stdout.is_empty() => {
+                println!("{stdout}");
             },
             None => {}
+        }
+
+        if !stderr.is_empty(){
+            println!("{stderr}");
         }
 
         ExecutionStatus::Continue
     }
 }
 
-fn execute_process(executable: &str, args: &CommandArgs, output_type: OutputType) -> String{
-    let mut command = std::process::Command::new(executable);
-    if !args.is_empty(){
-        command.args(args);
-    }
 
-    match output_type{
-        OutputType::Redirect => {
-            match command.output(){
-                Ok(output) => std::str::from_utf8(&output.stdout).unwrap().trim().to_string(),
-                Err(err) => format!("{err}")
-            }
-        },
-        OutputType::Display => {
-            match command.spawn().and_then(|mut c| c.wait()){
-                Ok(_) => { println!(); String::new() },
-                Err(err) => { println!("{err}"); String::new() }
-            }
-        }
-    }
-}
 
 pub enum ExecutionStatus{
     Exit,

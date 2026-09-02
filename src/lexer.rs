@@ -56,7 +56,7 @@ pub fn split_command(args: &str) -> Option<command::CommandArgs>{
                 "" 
             };
 
-            if prev_two_characters != " 1"{ //if got " 1>" leave only '>':
+            if prev_two_characters != " 1" && !arg.is_empty(){ //if got " 1>" leave only '>':
                 result.push(arg.clone());
             }
 
@@ -170,6 +170,7 @@ mod tests{
             (r#"hello>world"#, vec!["hello", ">", "world"]),
             (r#"hello1>world"#, vec!["hello1", ">", "world"]),
             (r#"hello 1> world"#, vec!["hello", ">", "world"]),
+            (r#"hello > world"#, vec!["hello", ">", "world"]),
             (r#""hello > world""#, vec!["hello > world"]),
         ];
 
