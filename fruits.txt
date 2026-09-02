@@ -1,1 +1,10 @@
-apple banana orange grape 
+Cargo.lock
+Cargo.toml
+codecrafters.yml
+cow.txt
+file 'name'
+fruits.txt
+README.md
+src
+target
+your_program.sh

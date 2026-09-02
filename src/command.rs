@@ -133,8 +133,6 @@ impl Command{
 
         let Output{ stdout, stderr } = result;
 
-        let stdout = stdout.trim();
-
         match redirection{
             Some(file) => {
                 let file = File::create(file).and_then(|mut f| {
@@ -193,6 +191,6 @@ mod test{
         assert!(file_path.exists(), "The file wasn't created");
         let content = fs::read_to_string(&file_path).unwrap();
 
-        assert_eq!(content, expected_content);
+        assert_eq!(content.trim(), expected_content);
     }
 }
