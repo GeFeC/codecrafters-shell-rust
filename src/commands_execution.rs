@@ -1,4 +1,5 @@
 use crate::command::{Command, CommandArgs, OutputType, Output};
+use crate::command;
 use std::env;
 use std::path::Path;
 
@@ -35,14 +36,14 @@ pub fn execute_type(checked_cmd: &CommandArgs) -> Output{
     let command = Command::from_str(cmd_name);
 
     if command.is_err(){
-        let executable_path = crate::env::find_in_path(cmd_name);
+        return Output::stderr(&format!("{}: not found", cmd_name));
+    }
 
-        match executable_path{
-            Some(path) => { return Output::stdout(&format!("{} is {}", cmd_name, path)); },
-            None => {
-                return Output::stderr(&format!("{}: not found", cmd_name));
-            }
-        }
+    let command = command.unwrap();
+
+    if let command::Type::Executable { .. } = command.r#type{
+        let executable_path = crate::env::find_in_path(cmd_name).unwrap();
+        return Output::stdout(&format!("{} is {}", cmd_name, executable_path));
     }
 
     Output::stdout(&format!("{} is a shell builtin", cmd_name))

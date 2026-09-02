@@ -7,7 +7,7 @@ use std::io::Write;
 pub type CommandArgs = Vec<String>;
 
 pub struct Command{
-    r#type: Type,
+    pub r#type: Type,
     redirection: Redirection
 }
 
