@@ -1,11 +1,14 @@
+bb
 Cargo.lock
 Cargo.toml
 codecrafters.yml
 cow.txt
 file 'name'
 fruits.txt
+gfsdgdf
+hello.txt
 README.md
 src
 target
+test.txt
 your_program.sh
-

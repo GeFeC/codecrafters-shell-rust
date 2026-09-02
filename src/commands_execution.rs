@@ -58,8 +58,8 @@ pub fn execute_process(executable: &str, args: &CommandArgs, output_type: Output
         OutputType::Redirect => {
             match command.output(){
                 Ok(output) => Output{
-                        stdout: std::str::from_utf8(&output.stdout).unwrap().to_string(),
-                        stderr: std::str::from_utf8(&output.stderr).unwrap().to_string()
+                        stdout: std::str::from_utf8(&output.stdout).unwrap().trim().to_string(),
+                        stderr: std::str::from_utf8(&output.stderr).unwrap().trim().to_string()
                     },
 
                 Err(err) => Output{

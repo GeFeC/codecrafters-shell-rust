@@ -110,11 +110,7 @@ impl Command{
         })
     }
 
-    pub fn execute(self) -> ExecutionStatus{
-        if let Type::Exit = self.r#type{
-            return ExecutionStatus::Exit;
-        }
-
+    pub fn output(self) -> Output{
         let Redirection(redirection) = self.redirection;
 
         let output_type = match redirection{
@@ -131,7 +127,7 @@ impl Command{
             _ => Output::empty()
         };
 
-        let Output{ stdout, stderr } = result;
+        let Output{ stdout, stderr } = &result;
 
         match redirection{
             Some(file) => {
@@ -146,17 +142,34 @@ impl Command{
                 });
 
                 if let Err(err) = file{
-                    println!("Unable to write to file: {}", err);
+                    return Output::stderr(&format!("Unable to write to file: {}", err));
                 }
+
+                Output::empty()
             },
             None if !stdout.is_empty() => {
-                println!("{stdout}");
+                result
             },
-            None => {}
+            None => {
+                Output::stderr(stderr)
+            }
         }
+
+    }
+
+    pub fn execute(self) -> ExecutionStatus{
+       if let Type::Exit = self.r#type{
+            return ExecutionStatus::Exit;
+        } 
+
+       let Output{ stdout, stderr } = self.output();
 
         if !stderr.is_empty(){
             println!("{stderr}");
+        }
+
+        if !stdout.is_empty(){
+            println!("{stdout}");
         }
 
         ExecutionStatus::Continue
@@ -185,18 +198,21 @@ mod test{
     use tempfile::tempdir;
     use std::fs;
 
+    fn execute(cmd: &str){
+        Command::from_str(cmd).unwrap().execute();
+    }
+
     #[test]
     fn test_output_redirection(){
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("fruits.txt");
         let expected_content = "apple banana orange";
 
-        let command = format!(r#"echo "{}" > {}"#, expected_content, file_path.display());
-        Command::from_str(&command).unwrap().execute();
+        execute(&format!(r#"echo "{}" > {}"#, expected_content, file_path.display()));
 
         assert!(file_path.exists(), "The file wasn't created");
         let content = fs::read_to_string(&file_path).unwrap();
 
-        assert_eq!(content.trim(), expected_content);
+        assert_eq!(content, format!("{}\n", expected_content));
     }
 }
