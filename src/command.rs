@@ -1,20 +1,29 @@
 use crate::commands_execution;
 use crate::env;
 use crate::lexer;
-use std::fs::File;
+use std::fs::{ OpenOptions };
 use std::io::Write;
 
 pub type CommandArgs = Vec<String>;
 
 pub struct Command{
     pub r#type: Type,
-    redirection: Redirection
+    redirection: Option<Redirection>
 }
 
-pub enum Redirection{
+pub struct Redirection{
+    target: RedirectionTarget,
+    r#type: RedirectionType
+}
+
+pub enum RedirectionTarget{
     Stdout(String),
-    Stderr(String),
-    None
+    Stderr(String)
+}
+
+pub enum RedirectionType{
+    Overwrite,
+    Append
 }
 
 pub struct Output{
@@ -79,6 +88,41 @@ impl Type{
 }
 
 impl Command{
+    fn get_redirection_and_new_command_args(command_args: &[String]) -> (Option<Redirection>, &[String]){
+        const REDIRECTION_SYMBOLS: [&str; 4] = [">", "2>", ">>", "2>>"];
+
+        let symbol_pos = command_args.iter().position(|e| REDIRECTION_SYMBOLS.contains(&e.as_str()));
+
+        let (symbol, command_args, target_file) = match symbol_pos{
+            Some(idx) => {
+                let symbol = command_args[idx].as_str();
+                let (command_args, target_file) = command_args.split_at(idx);
+                let target_file = target_file[1..].join(" ");
+
+                (symbol, command_args, target_file)
+            },
+            None => ("", command_args, String::new())
+        };
+
+        if !REDIRECTION_SYMBOLS.contains(&symbol){
+            return (None, command_args);
+        }
+
+        let target = match symbol{
+            ">" | ">>" => RedirectionTarget::Stdout(target_file),
+            "2>" | "2>>" => RedirectionTarget::Stderr(target_file),
+            _ => unreachable!()
+        };
+        
+        let r#type = match symbol{
+            ">" | "2>" => RedirectionType::Overwrite,
+            ">>" | "2>>" => RedirectionType::Append,
+            _ => unreachable!()
+        };
+
+        (Some(Redirection{ target, r#type }), command_args)
+    }
+
     pub fn from_str(command: &str) -> Result<Command, String>{
         let command = lexer::split_command(command);
         if command.is_none(){
@@ -89,24 +133,7 @@ impl Command{
         let command_name = command.first().unwrap().as_str();
         let command_args = command[1..].to_owned();
 
-        let redirection_symbol_pos = command_args.iter().position(|e| e == ">" || e == "2>");
-
-        let (redirection_symbol, command_args, target_file) = match redirection_symbol_pos{
-            Some(idx) => {
-                let symbol = command_args[idx].as_str();
-                let (command_args, target_file) = command_args.split_at(idx);
-                let target_file = target_file[1..].join(" ");
-
-                (symbol, command_args, target_file)
-            },
-            None => ("", &command_args[..], String::new())
-        };
-
-        let redirection = match redirection_symbol{
-            ">" => Redirection::Stdout(target_file),
-            "2>" => Redirection::Stderr(target_file),
-            _ => Redirection::None
-        };
+        let (redirection, command_args) = Command::get_redirection_and_new_command_args(&command_args);
         
         let command_type = Type::from(command_name, command_args.to_vec())?;
 
@@ -122,8 +149,8 @@ impl Command{
         } 
 
         let output_type = match self.redirection{
-            Redirection::None => OutputType::Display,
-            _ => OutputType::Redirect,
+            None => OutputType::Display,
+            Some(_) => OutputType::Redirect,
         };
 
         let result = match self.r#type{
@@ -137,33 +164,45 @@ impl Command{
 
         let Output{ stdout, stderr } = result;
 
-        if !matches!(self.redirection, Redirection::Stdout(_)) && !stdout.is_empty(){
-            println!("{stdout}");
-        }
-
-        if !matches!(self.redirection, Redirection::Stderr(_)) && !stderr.is_empty(){
-            println!("{stderr}");
-        }
-
-        if matches!(self.redirection, Redirection::None){
+        if self.redirection.is_none(){
+            if !stdout.is_empty(){
+                println!("{stdout}");
+            }
+            if !stderr.is_empty(){
+                println!("{stderr}");
+            }
             return ExecutionStatus::Continue;
         }
 
-        let (out, file) = match self.redirection{
-            Redirection::Stdout(file) => (stdout, file),
-            Redirection::Stderr(file) => (stderr, file),
-            Redirection::None => unreachable!()
+        let redirection = self.redirection.unwrap();
+        if !matches!(redirection.target, RedirectionTarget::Stdout(_)) && !stdout.is_empty(){
+            println!("{stdout}");
+        }
+
+        if !matches!(redirection.target, RedirectionTarget::Stderr(_)) && !stderr.is_empty(){
+            println!("{stderr}");
+        }
+
+        let (out, file) = match redirection.target{
+            RedirectionTarget::Stdout(file) => (stdout, file),
+            RedirectionTarget::Stderr(file) => (stderr, file),
         };
 
-        let file = File::create(file).and_then(|mut f| {
-            f.write_all(out.as_bytes())?;
-            if !out.is_empty() && !out.ends_with("\n"){
-                f.write_all(b"\n")
-            }
-            else{
+        let should_append = matches!(redirection.r#type, RedirectionType::Append);
+        let file = OpenOptions::new()
+            .write(true)
+            .append(should_append)
+            .truncate(!should_append)
+            .create(true)
+            .open(file)
+            .and_then(|mut f|{
+                write!(f, "{out}")?;
+                if !out.is_empty() && !out.ends_with("\n"){
+                    return writeln!(f);
+                }
+
                 Ok(())
-            }
-        });
+            });
 
         if let Err(err) = file{
             println!("{}", err);
@@ -211,5 +250,18 @@ mod test{
         let content = fs::read_to_string(&file_path).unwrap();
 
         assert_eq!(content, format!("{}\n", expected_content));
+    }
+
+    #[test]
+    fn test_empty_stderr_redirection(){
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("fruits.txt");
+
+        execute(&format!(r#"echo "apple banana orange" 2> {}"#, file_path.display()));
+
+        assert!(file_path.exists(), "The file wasn't created");
+        let content = fs::read_to_string(&file_path).unwrap();
+
+        assert_eq!(content, "");
     }
 }

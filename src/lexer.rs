@@ -52,22 +52,30 @@ pub fn split_command(args: &str) -> Option<command::CommandArgs>{
             let prev_two_characters = if idx >= 2{ 
                 &args[(idx - 2)..(idx)] 
             } 
-            else { 
-                "" 
-            };
+            else { "" };
 
-            match prev_two_characters{
+            let is_append_symbol = idx + 1 < args.len() && args.as_bytes()[idx + 1] == b'>';
+            
+            let second_symbol = if is_append_symbol{ ">" } else{ "" };
+
+            if second_symbol == ">"{
+                iter.next();
+            }
+
+            let symbol = match prev_two_characters{
                 " 2" => {
-                    result.push(String::from("2>"));
+                    "2>"
                 }
                 _ => {
                     if prev_two_characters != " 1" && !arg.is_empty(){
                         result.push(arg.clone());
                     }
 
-                    result.push(String::from(">"));
+                    ">"
                 }
-            }
+            };
+
+            result.push(format!("{symbol}{second_symbol}"));
 
             arg = "".to_string();
             continue;
@@ -201,5 +209,32 @@ mod tests{
         }
     }
 
+    #[test]
+    fn test_stdout_redirection_in_append_mode(){
+        let cases = [
+            (r#"hello>>world"#, vec!["hello", ">>", "world"]),
+            (r#"hello1>>world"#, vec!["hello1", ">>", "world"]),
+            (r#"hello 1>> world"#, vec!["hello", ">>", "world"]),
+            (r#"hello >> world"#, vec!["hello", ">>", "world"]),
+            (r#""hello >> world""#, vec!["hello >> world"]),
+        ];
 
+        for (case, expected) in cases{
+            assert_eq!(split_command(case).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_stderr_redirection_in_append_mode(){
+        let cases = [
+            (r#"hello2>>world"#, vec!["hello2", ">>", "world"]),
+            (r#""hello"2>>world"#, vec!["hello2", ">>", "world"]),
+            (r#"hello 2>> world"#, vec!["hello", "2>>", "world"]),
+            (r#""hello 2>> world""#, vec!["hello 2>> world"]),
+        ];
+
+        for (case, expected) in cases{
+            assert_eq!(split_command(case).unwrap(), expected);
+        }
+    }
 }
