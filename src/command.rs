@@ -136,7 +136,13 @@ impl Command{
         match redirection{
             Some(file) => {
                 let file = File::create(file).and_then(|mut f| {
-                    f.write_all(stdout.as_bytes())
+                    f.write_all(stdout.as_bytes())?;
+                    if !stdout.ends_with("\n"){
+                        f.write_all(b"\n")
+                    }
+                    else{
+                        Ok(())
+                    }
                 });
 
                 if let Err(err) = file{
