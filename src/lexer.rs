@@ -56,11 +56,19 @@ pub fn split_command(args: &str) -> Option<command::CommandArgs>{
                 "" 
             };
 
-            if prev_two_characters != " 1" && !arg.is_empty(){ //if got " 1>" leave only '>':
-                result.push(arg.clone());
+            match prev_two_characters{
+                " 2" => {
+                    result.push(String::from("2>"));
+                }
+                _ => {
+                    if prev_two_characters != " 1" && !arg.is_empty(){
+                        result.push(arg.clone());
+                    }
+
+                    result.push(String::from(">"));
+                }
             }
 
-            result.push(String::from(">"));
             arg = "".to_string();
             continue;
         }
@@ -165,7 +173,7 @@ mod tests{
     }
 
     #[test]
-    fn test_output_redirection(){
+    fn test_stdout_redirection(){
         let cases = [
             (r#"hello>world"#, vec!["hello", ">", "world"]),
             (r#"hello1>world"#, vec!["hello1", ">", "world"]),
@@ -178,4 +186,20 @@ mod tests{
             assert_eq!(split_command(case).unwrap(), expected);
         }
     }
+
+    #[test]
+    fn test_stderr_redirection(){
+        let cases = [
+            (r#"hello2>world"#, vec!["hello2", ">", "world"]),
+            (r#""hello"2>world"#, vec!["hello2", ">", "world"]),
+            (r#"hello 2> world"#, vec!["hello", "2>", "world"]),
+            (r#""hello 2> world""#, vec!["hello 2> world"]),
+        ];
+
+        for (case, expected) in cases{
+            assert_eq!(split_command(case).unwrap(), expected);
+        }
+    }
+
+
 }

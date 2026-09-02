@@ -41,9 +41,8 @@ pub fn execute_type(checked_cmd: &CommandArgs) -> Output{
 
     let command = command.unwrap();
 
-    if let command::Type::Executable { .. } = command.r#type{
-        let executable_path = crate::env::find_in_path(cmd_name).unwrap();
-        return Output::stdout(&format!("{} is {}", cmd_name, executable_path));
+    if let command::Type::Executable { path, .. } = command.r#type{
+        return Output::stdout(&format!("{} is {}", cmd_name, path));
     }
 
     Output::stdout(&format!("{} is a shell builtin", cmd_name))
@@ -75,5 +74,23 @@ pub fn execute_process(executable: &str, args: &CommandArgs, output_type: Output
                 Err(err) => { println!("{err}"); Output::empty() }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test{
+    use super::*;
+
+    fn test_type_helper(cmd: &str) -> Output{
+        execute_type(&vec![cmd.to_string()])
+    }
+
+    #[test]
+    fn test_type(){
+        let output = test_type_helper("cat");
+        assert_ne!(output.stdout, "cat is a shell builtin");
+
+        let output = test_type_helper("echo");
+        assert_eq!(output.stdout, "echo is a shell builtin");
     }
 }

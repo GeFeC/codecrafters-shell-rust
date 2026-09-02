@@ -11,7 +11,11 @@ pub struct Command{
     redirection: Redirection
 }
 
-pub struct Redirection(Option<String>);
+pub enum Redirection{
+    Stdout(String),
+    Stderr(String),
+    None
+}
 
 pub struct Output{
     pub stdout: String,
@@ -53,7 +57,7 @@ pub enum Type{
     #[allow(clippy::enum_variant_names)]
     Type(CommandArgs),
     Cd(CommandArgs),
-    Executable{ name: String, args: CommandArgs }
+    Executable{ name: String, args: CommandArgs, path: String }
 }
 
 impl Type{
@@ -64,9 +68,10 @@ impl Type{
             "type" => Ok(Type::Type(command_args)),
             "pwd" => Ok(Type::Pwd),
             "cd" => Ok(Type::Cd(command_args)),
-            _ if env::find_in_path(command).is_some() => Ok(Type::Executable{
+            _ if let Some(path) = env::find_in_path(command) => Ok(Type::Executable{
                 name: command.to_owned(),
-                args: command_args
+                args: command_args,
+                path
             }),
             _ => Err(format!("{}: command not found", command))
         }
@@ -84,29 +89,30 @@ impl Command{
         let command_name = command.first().unwrap().as_str();
         let command_args = command[1..].to_owned();
 
-        let (command_args, redirection) = match command_args.iter().position(|e| e == ">"){
+        let redirection_symbol_pos = command_args.iter().position(|e| e == ">" || e == "2>");
+
+        let (redirection_symbol, command_args, target_file) = match redirection_symbol_pos{
             Some(idx) => {
-                let (new_cmd_args, target_file) = command_args.split_at(idx);
-                let target_file = &target_file[1..];
+                let symbol = command_args[idx].as_str();
+                let (command_args, target_file) = command_args.split_at(idx);
+                let target_file = target_file[1..].join(" ");
 
-                let redirection = if target_file.is_empty(){
-                    None
-                }
-                else{
-                    Some(target_file.join(" "))
-                };
-
-                (new_cmd_args, redirection)
+                (symbol, command_args, target_file)
             },
-            None => (&command_args[..], None)
-            
+            None => ("", &command_args[..], String::new())
         };
 
+        let redirection = match redirection_symbol{
+            ">" => Redirection::Stdout(target_file),
+            "2>" => Redirection::Stderr(target_file),
+            _ => Redirection::None
+        };
+        
         let command_type = Type::from(command_name, command_args.to_vec())?;
 
         Ok(Command{
             r#type: command_type,
-            redirection: Redirection(redirection)
+            redirection
         })
     }
 
@@ -115,11 +121,9 @@ impl Command{
             return ExecutionStatus::Exit;
         } 
 
-        let Redirection(redirection) = self.redirection;
-
-        let output_type = match redirection{
-            Some(_) => OutputType::Redirect,
-            None => OutputType::Display
+        let output_type = match self.redirection{
+            Redirection::None => OutputType::Display,
+            _ => OutputType::Redirect,
         };
 
         let result = match self.r#type{
@@ -127,37 +131,42 @@ impl Command{
             Type::Type(args) => commands_execution::execute_type(&args),
             Type::Pwd => commands_execution::execute_pwd(),
             Type::Cd(args) => commands_execution::execute_cd(&args),
-            Type::Executable{ name, args } => commands_execution::execute_process(&name, &args, output_type),
+            Type::Executable{ name, args, .. } => commands_execution::execute_process(&name, &args, output_type),
             _ => Output::empty()
         };
 
         let Output{ stdout, stderr } = result;
 
-        match redirection{
-            Some(file) => {
-                let file = File::create(file).and_then(|mut f| {
-                    f.write_all(stdout.as_bytes())?;
-                    if !stdout.ends_with("\n"){
-                        f.write_all(b"\n")
-                    }
-                    else{
-                        Ok(())
-                    }
-                });
+        if !matches!(self.redirection, Redirection::Stdout(_)) && !stdout.is_empty(){
+            println!("{stdout}");
+        }
 
-                if let Err(err) = file{
-                    println!("Unable to write to file: {}", err);
-                }
-            },
-            None if !stdout.is_empty() => {
-                println!("{stdout}")
-            },
-            None => {}
+        if !matches!(self.redirection, Redirection::Stderr(_)) && !stderr.is_empty(){
+            println!("{stderr}");
+        }
+
+        if matches!(self.redirection, Redirection::None){
+            return ExecutionStatus::Continue;
+        }
+
+        let (out, file) = match self.redirection{
+            Redirection::Stdout(file) => (stdout, file),
+            Redirection::Stderr(file) => (stderr, file),
+            Redirection::None => unreachable!()
         };
 
+        let file = File::create(file).and_then(|mut f| {
+            f.write_all(out.as_bytes())?;
+            if !out.ends_with("\n"){
+                f.write_all(b"\n")
+            }
+            else{
+                Ok(())
+            }
+        });
 
-        if !stderr.is_empty(){
-            println!("{stderr}");
+        if let Err(err) = file{
+            println!("{}", err);
         }
 
         ExecutionStatus::Continue
