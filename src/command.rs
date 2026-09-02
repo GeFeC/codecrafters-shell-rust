@@ -110,7 +110,11 @@ impl Command{
         })
     }
 
-    pub fn output(self) -> Output{
+    pub fn execute(self) -> ExecutionStatus{
+        if let Type::Exit = self.r#type{
+            return ExecutionStatus::Exit;
+        } 
+
         let Redirection(redirection) = self.redirection;
 
         let output_type = match redirection{
@@ -127,7 +131,7 @@ impl Command{
             _ => Output::empty()
         };
 
-        let Output{ stdout, stderr } = &result;
+        let Output{ stdout, stderr } = result;
 
         match redirection{
             Some(file) => {
@@ -142,34 +146,18 @@ impl Command{
                 });
 
                 if let Err(err) = file{
-                    return Output::stderr(&format!("Unable to write to file: {}", err));
+                    println!("Unable to write to file: {}", err);
                 }
-
-                Output::empty()
             },
             None if !stdout.is_empty() => {
-                result
+                println!("{stdout}")
             },
-            None => {
-                Output::stderr(stderr)
-            }
-        }
+            None => {}
+        };
 
-    }
-
-    pub fn execute(self) -> ExecutionStatus{
-       if let Type::Exit = self.r#type{
-            return ExecutionStatus::Exit;
-        } 
-
-       let Output{ stdout, stderr } = self.output();
 
         if !stderr.is_empty(){
             println!("{stderr}");
-        }
-
-        if !stdout.is_empty(){
-            println!("{stdout}");
         }
 
         ExecutionStatus::Continue
