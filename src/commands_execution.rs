@@ -1,10 +1,11 @@
 use crate::command::{Command, CommandArgs, OutputType, Output};
 use crate::command;
+use crate::lexer::{ tokens_to_string };
 use std::env;
 use std::path::Path;
 
 pub fn execute_echo(args: &CommandArgs) -> Output{
-    Output::stdout(&args.join(" "))
+    Output::stdout(&tokens_to_string(args))
 }
 
 pub fn execute_pwd() -> Output{
@@ -14,7 +15,7 @@ pub fn execute_pwd() -> Output{
 pub fn execute_cd(args: &CommandArgs) -> Output{
     let home_dir = env::home_dir();
 
-    let path = args.join(" ");
+    let path = tokens_to_string(args);
     let path = match path.as_str(){
         "~" | "" => home_dir.as_deref().and_then(Path::to_str).unwrap_or("~").to_owned(),
         _ => path
@@ -32,8 +33,8 @@ pub fn execute_type(checked_cmd: &CommandArgs) -> Output{
         return Output::stderr("Usage: type <command name without args>");
     }
 
-    let cmd_name = checked_cmd.first().unwrap();
-    let command = Command::from_str(cmd_name);
+    let cmd_name = checked_cmd.first().unwrap().to_string();
+    let command = Command::from_str(&cmd_name);
 
     if command.is_err(){
         return Output::stderr(&format!("{}: not found", cmd_name));
@@ -51,7 +52,7 @@ pub fn execute_type(checked_cmd: &CommandArgs) -> Output{
 pub fn execute_process(executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
     let mut command = std::process::Command::new(executable);
     if !args.is_empty(){
-        command.args(args);
+        command.args(args.iter().map(|t| t.to_string()));
     }
     
     match output_type{
@@ -80,9 +81,10 @@ pub fn execute_process(executable: &str, args: &CommandArgs, output_type: Output
 #[cfg(test)]
 mod test{
     use super::*;
+    use crate::lexer::Token;
 
     fn test_type_helper(cmd: &str) -> Output{
-        execute_type(&vec![cmd.to_string()])
+        execute_type(&[Token::Arg(cmd.to_owned())])
     }
 
     #[test]

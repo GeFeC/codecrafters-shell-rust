@@ -28,7 +28,7 @@ fn main() {
                 }
             },
             Err(err) => {
-                println!("{err}");
+                println!("Syntax Error: {err}");
             }
         }
     }

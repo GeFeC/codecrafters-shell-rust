@@ -4,7 +4,7 @@ use crate::lexer;
 use std::fs::{ OpenOptions };
 use std::io::Write;
 
-pub type CommandArgs = Vec<String>;
+pub type CommandArgs = [lexer::Token];
 
 pub struct Command{
     pub r#type: Type,
@@ -62,24 +62,24 @@ pub enum OutputType{
 pub enum Type{
     Exit,
     Pwd,
-    Echo(CommandArgs),
+    Echo(Vec<lexer::Token>),
     #[allow(clippy::enum_variant_names)]
-    Type(CommandArgs),
-    Cd(CommandArgs),
-    Executable{ name: String, args: CommandArgs, path: String }
+    Type(Vec<lexer::Token>),
+    Cd(Vec<lexer::Token>),
+    Executable{ name: String, args: Vec<lexer::Token>, path: String }
 }
 
 impl Type{
-    pub fn from(command: &str, command_args: CommandArgs) -> Result<Type, String>{
+    pub fn from(command: &str, command_args: &[lexer::Token]) -> Result<Type, String>{
         match command{
             "exit" => Ok(Type::Exit),
-            "echo" => Ok(Type::Echo(command_args)),
-            "type" => Ok(Type::Type(command_args)),
+            "echo" => Ok(Type::Echo(command_args.to_vec())),
+            "type" => Ok(Type::Type(command_args.to_vec())),
             "pwd" => Ok(Type::Pwd),
-            "cd" => Ok(Type::Cd(command_args)),
+            "cd" => Ok(Type::Cd(command_args.to_vec())),
             _ if let Some(path) = env::find_in_path(command) => Ok(Type::Executable{
                 name: command.to_owned(),
-                args: command_args,
+                args: command_args.to_vec(),
                 path
             }),
             _ => Err(format!("{}: command not found", command))
@@ -88,35 +88,40 @@ impl Type{
 }
 
 impl Command{
-    fn get_redirection_and_new_command_args(command_args: &[String]) -> (Option<Redirection>, &[String]){
-        const REDIRECTION_SYMBOLS: [&str; 4] = [">", "2>", ">>", "2>>"];
-
-        let symbol_pos = command_args.iter().position(|e| REDIRECTION_SYMBOLS.contains(&e.as_str()));
+    fn get_redirection_and_new_command_args(command_args: Vec<lexer::Token>) -> (Option<Redirection>, Vec<lexer::Token>){
+        let symbol_pos = command_args.iter().position(|e| e.is_redirection());
 
         let (symbol, command_args, target_file) = match symbol_pos{
             Some(idx) => {
-                let symbol = command_args[idx].as_str();
+                let symbol = &command_args[idx];
                 let (command_args, target_file) = command_args.split_at(idx);
-                let target_file = target_file[1..].join(" ");
+                let target_file = &target_file[1..];
 
-                (symbol, command_args, target_file)
+                (Some(symbol), command_args.to_vec(), target_file.to_vec())
             },
-            None => ("", command_args, String::new())
+            None => (None, command_args, Vec::<Token>::new())
         };
 
-        if !REDIRECTION_SYMBOLS.contains(&symbol){
-            return (None, command_args);
+        if symbol.is_none(){
+            return (None, command_args.to_vec());
         }
 
+        let symbol = symbol.unwrap();
+        use lexer::Token;
+
+        let Token::Arg(target_file) = target_file.into_iter().nth(0).unwrap_or(Token::Stdout) else{ 
+            panic!("Wrong redirection file name not handled!");
+        };
+
         let target = match symbol{
-            ">" | ">>" => RedirectionTarget::Stdout(target_file),
-            "2>" | "2>>" => RedirectionTarget::Stderr(target_file),
+            Token::Stdout | Token::StdoutAppend => RedirectionTarget::Stdout(target_file),
+            Token::Stderr | Token::StderrAppend => RedirectionTarget::Stderr(target_file),
             _ => unreachable!()
         };
         
         let r#type = match symbol{
-            ">" | "2>" => RedirectionType::Overwrite,
-            ">>" | "2>>" => RedirectionType::Append,
+            Token::Stdout | Token::Stderr => RedirectionType::Overwrite,
+            Token::StdoutAppend | Token::StderrAppend => RedirectionType::Append,
             _ => unreachable!()
         };
 
@@ -124,23 +129,23 @@ impl Command{
     }
 
     pub fn from_str(command: &str) -> Result<Command, String>{
-        let command = lexer::split_command(command);
-        if command.is_none(){
-            return Err(String::from("Missing closing quote"));
+        let command = lexer::split_command(command)?;
+
+        if let lexer::Token::Arg(command_name) = command.first().unwrap(){
+            let command_args = &command[1..];
+
+            let (redirection, command_args) = Command::get_redirection_and_new_command_args(command_args.to_vec());
+            
+            let command_type = Type::from(command_name, &command_args)?;
+
+            return Ok(Command{
+                r#type: command_type,
+                redirection
+            });
         }
 
-        let command = command.unwrap();
-        let command_name = command.first().unwrap().as_str();
-        let command_args = command[1..].to_owned();
+        Err(String::from("Invalid command name"))
 
-        let (redirection, command_args) = Command::get_redirection_and_new_command_args(&command_args);
-        
-        let command_type = Type::from(command_name, command_args.to_vec())?;
-
-        Ok(Command{
-            r#type: command_type,
-            redirection
-        })
     }
 
     pub fn execute(self) -> ExecutionStatus{
@@ -212,8 +217,6 @@ impl Command{
     }
 }
 
-
-
 pub enum ExecutionStatus{
     Exit,
     Continue
@@ -229,7 +232,7 @@ impl ExecutionStatus{
 }
 
 #[cfg(test)]
-mod test{
+mod tests{
     use super::*;
     use tempfile::tempdir;
     use std::fs;
