@@ -6,6 +6,7 @@ use rustyline::{Context, Result, Helper};
 use strum::VariantNames;
 
 use crate::command::Kind;
+use crate::env;
 
 pub struct CommandCompleter{
     commands: Vec<String>
@@ -14,7 +15,10 @@ pub struct CommandCompleter{
 impl CommandCompleter{
     pub fn new() -> Self{
         Self{
-            commands: Kind::VARIANTS.iter().map(|&s| s.to_string()).collect()
+            commands: [
+                Kind::VARIANTS.iter().map(|&s| s.to_string()).collect(),
+                env::get_all_executables(),
+            ].concat()
         }
     }
 }
