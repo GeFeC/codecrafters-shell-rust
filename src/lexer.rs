@@ -161,7 +161,7 @@ fn skip_spaces<I: LexerIterator>(mut iter: I) -> I{
 fn lexe_redirection<I: LexerIterator>(args: &str, mut iter: I) -> Result<(Token, I), String>{
     let next = iter.clone().next();
 
-    if next.is_none(){
+    if let Some((_, '\0')) = next{
         return Err("No target file provided".to_owned());
     }
 
@@ -284,6 +284,8 @@ mod tests{
             (r#"hello > world"#, vec![arg("hello"), Token::Stdout, arg("world")]),
             (r#""hello > world""#, vec![arg("hello > world")]),
         ]);
+
+        assert!(split_command("hello>").is_err());
     }
 
     #[test]

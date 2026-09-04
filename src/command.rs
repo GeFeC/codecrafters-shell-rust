@@ -1,13 +1,18 @@
 use crate::commands_execution;
 use crate::env;
 use crate::lexer;
+use std::str::FromStr;
+use strum_macros::EnumString;
+use strum_macros::VariantNames;
 use std::fs::{ OpenOptions };
 use std::io::Write;
 
 pub type CommandArgs = [lexer::Token];
+pub type CommandArgsStorage = Vec<lexer::Token>;
 
 pub struct Command{
-    pub r#type: Type,
+    pub r#type: Kind,
+    args: CommandArgsStorage,
     redirection: Option<Redirection>
 }
 
@@ -59,32 +64,20 @@ pub enum OutputType{
     Redirect
 }
 
-pub enum Type{
+#[derive(PartialEq, EnumString, VariantNames)]
+pub enum Kind{
+    #[strum(to_string = "exit")]
     Exit,
+    #[strum(to_string = "pwd")]
     Pwd,
-    Echo(Vec<lexer::Token>),
-    #[allow(clippy::enum_variant_names)]
-    Type(Vec<lexer::Token>),
-    Cd(Vec<lexer::Token>),
-    Executable{ name: String, args: Vec<lexer::Token>, path: String }
-}
-
-impl Type{
-    pub fn from(command: &str, command_args: &[lexer::Token]) -> Result<Type, String>{
-        match command{
-            "exit" => Ok(Type::Exit),
-            "echo" => Ok(Type::Echo(command_args.to_vec())),
-            "type" => Ok(Type::Type(command_args.to_vec())),
-            "pwd" => Ok(Type::Pwd),
-            "cd" => Ok(Type::Cd(command_args.to_vec())),
-            _ if let Some(path) = env::find_in_path(command) => Ok(Type::Executable{
-                name: command.to_owned(),
-                args: command_args.to_vec(),
-                path
-            }),
-            _ => Err(format!("{}: command not found", command))
-        }
-    }
+    #[strum(to_string = "echo")]
+    Echo,
+    #[strum(to_string = "type")]
+    Type,
+    #[strum(to_string = "cd")]
+    Cd,
+    #[strum(disabled)]
+    Executable{ name: String, path: String }
 }
 
 impl Command{
@@ -136,10 +129,18 @@ impl Command{
 
             let (redirection, command_args) = Command::get_redirection_and_new_command_args(command_args.to_vec());
             
-            let command_type = Type::from(command_name, &command_args)?;
+            let command_type = match Kind::from_str(command_name){
+                Ok(command) => Ok(command),
+                Err(_) if let Some(path) = env::find_in_path(command_name) => Ok(Kind::Executable{
+                    name: command_name.to_owned(),
+                    path
+                }),
+                Err(_) => Err(format!("{}: command not found", command_name))
+            };
 
             return Ok(Command{
-                r#type: command_type,
+                r#type: command_type?,
+                args: command_args,
                 redirection
             });
         }
@@ -149,7 +150,7 @@ impl Command{
     }
 
     pub fn execute(self) -> ExecutionStatus{
-        if let Type::Exit = self.r#type{
+        if let Kind::Exit = self.r#type{
             return ExecutionStatus::Exit;
         } 
 
@@ -159,11 +160,11 @@ impl Command{
         };
 
         let result = match self.r#type{
-            Type::Echo(args) => commands_execution::execute_echo(&args),
-            Type::Type(args) => commands_execution::execute_type(&args),
-            Type::Pwd => commands_execution::execute_pwd(),
-            Type::Cd(args) => commands_execution::execute_cd(&args),
-            Type::Executable{ name, args, .. } => commands_execution::execute_process(&name, &args, output_type),
+            Kind::Echo => commands_execution::execute_echo(&self.args),
+            Kind::Type => commands_execution::execute_type(&self.args),
+            Kind::Pwd => commands_execution::execute_pwd(),
+            Kind::Cd => commands_execution::execute_cd(&self.args),
+            Kind::Executable{ name, .. } => commands_execution::execute_process(&name, &self.args, output_type),
             _ => Output::empty()
         };
 

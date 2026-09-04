@@ -42,7 +42,7 @@ pub fn execute_type(checked_cmd: &CommandArgs) -> Output{
 
     let command = command.unwrap();
 
-    if let command::Type::Executable { path, .. } = command.r#type{
+    if let command::Kind::Executable { path, .. } = command.r#type{
         return Output::stdout(&format!("{} is {}", cmd_name, path));
     }
 
