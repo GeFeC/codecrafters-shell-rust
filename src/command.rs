@@ -146,7 +146,6 @@ impl Command{
         }
 
         Err(String::from("Invalid command name"))
-
     }
 
     pub fn execute(self) -> ExecutionStatus{

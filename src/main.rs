@@ -34,7 +34,7 @@ fn main(){
                         }
                     },
                     Err(err) => {
-                        println!("Syntax Error: {err}");
+                        println!("{err}");
                     }
                 }
             },
