@@ -34,8 +34,8 @@ impl Completer for CommandCompleter{
         for cmd in &self.commands{
             if cmd.starts_with(input){
                 matches.push(Pair{
-                    display: cmd.clone(),
-                    replacement: cmd.clone()
+                    display: format!("{cmd} "),
+                    replacement: format!("{cmd} ")
                 })
             }
         }
