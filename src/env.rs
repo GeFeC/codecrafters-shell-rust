@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::env;
 use std::fs;
 use is_executable::is_executable;
@@ -18,6 +17,8 @@ fn any_file_in_path<F: FnMut(&str, &str) -> bool>(mut action: F){
         for entry in entries.unwrap(){
             let Ok(entry) = entry else { continue; };
             let entry = entry.path();
+
+            if !is_executable(&entry){ continue; }
             
             let Some(filename) = entry.file_name() else { continue; };
             let Some(filename) = filename.to_str() else { continue; };
