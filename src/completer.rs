@@ -1,4 +1,4 @@
-use rustyline::completion::{Completer, Pair};
+use rustyline::completion::{Completer, Pair, FilenameCompleter};
 use rustyline::validate::Validator;
 use rustyline::hint::Hinter;
 use rustyline::highlight::Highlighter;
@@ -11,6 +11,7 @@ use crate::env;
 
 pub struct CommandCompleter{
     commands: Trie,
+    filename_completer: FilenameCompleter
 }
 
 impl CommandCompleter{
@@ -24,7 +25,8 @@ impl CommandCompleter{
         ].concat();
 
         Self{
-            commands: Trie::from(&commands)
+            commands: Trie::from(&commands),
+            filename_completer: FilenameCompleter::new()
         }
     }
 }
@@ -39,7 +41,10 @@ impl Completer for CommandCompleter{
         _ctx: &Context<'_>,
     ) -> Result<(usize, Vec<Self::Candidate>)>{
 
-        let input = &line[..pos];
+        let input = &line[..pos].trim_start();
+        if input.contains(' '){
+            return self.filename_completer.complete_path(line, pos);
+        } 
 
         let mut matches = self.commands.all_starting_with(input);
         matches.sort();
