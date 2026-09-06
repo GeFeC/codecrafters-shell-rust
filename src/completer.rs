@@ -43,11 +43,13 @@ impl Completer for CommandCompleter{
 
         let input = &line[..pos].trim_start();
         if input.contains(' '){
-            let (idx, matches) = self.filename_completer.complete_path(line, pos)?;
-            let mut matches = matches
-                .iter()
-                .map(|p| Pair{ display: p.replacement.clone(), replacement: p.replacement.clone() })
-                .collect::<Vec<_>>();
+            let (idx, mut matches) = self.filename_completer.complete_path(line, pos)?;
+
+            for m in &mut matches{
+                if m.replacement.ends_with('/'){
+                    m.display.push('/');
+                }
+            }
 
             if matches.len() == 1{
                 let m = matches.pop().unwrap();
