@@ -41,9 +41,10 @@ impl Completer for CommandCompleter{
 
         let input = &line[..pos];
 
-        let matches = self.commands.all_starting_with(input);
+        let mut matches = self.commands.all_starting_with(input);
+        matches.sort();
         let matches = matches.iter().map(|s| {
-            let s = format!("{s} "); 
+            let s = s.to_string();
             Pair{ 
                 display: s.clone(), 
                 replacement: s
