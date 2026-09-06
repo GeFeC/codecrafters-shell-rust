@@ -43,7 +43,18 @@ impl Completer for CommandCompleter{
 
         let input = &line[..pos].trim_start();
         if input.contains(' '){
-            return self.filename_completer.complete_path(line, pos);
+            let (idx, mut matches) = self.filename_completer.complete_path(line, pos)?;
+
+            if matches.len() == 1{
+                let m = matches.pop().unwrap();
+
+                return Ok((idx, vec![Pair{
+                    display: m.display,
+                    replacement: format!("{} ", m.replacement)
+                }]));
+            }
+
+            return Ok((idx, matches));
         } 
 
         let mut matches = self.commands.all_starting_with(input);
