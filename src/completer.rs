@@ -48,9 +48,14 @@ impl Completer for CommandCompleter{
             if matches.len() == 1{
                 let m = matches.pop().unwrap();
 
+                let mut replacement = m.replacement;
+                if !replacement.ends_with('/'){
+                    replacement.push(' ')
+                }
+
                 return Ok((idx, vec![Pair{
                     display: m.display,
-                    replacement: format!("{} ", m.replacement)
+                    replacement
                 }]));
             }
 
