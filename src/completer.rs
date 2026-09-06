@@ -10,7 +10,7 @@ use crate::command;
 use crate::env;
 
 pub struct CommandCompleter{
-    commands: Trie
+    commands: Trie,
 }
 
 impl CommandCompleter{
@@ -38,6 +38,7 @@ impl Completer for CommandCompleter{
         pos: usize,
         _ctx: &Context<'_>,
     ) -> Result<(usize, Vec<Self::Candidate>)>{
+
         let input = &line[..pos];
 
         let matches = self.commands.all_starting_with(input);

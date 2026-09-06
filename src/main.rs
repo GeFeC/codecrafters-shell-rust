@@ -1,8 +1,7 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
-use rustyline::error::ReadlineError;
-use rustyline::history::DefaultHistory;
-use rustyline::Editor;
+use rustyline::{Config, error::ReadlineError};
+use rustyline::{CompletionType, Editor};
 
 mod commands_execution;
 mod command;
@@ -14,7 +13,11 @@ mod trie;
 use command::{ Command };
 
 fn main(){
-    let mut rl = Editor::<completer::CommandCompleter, DefaultHistory>::new().unwrap();
+    let config = Config::builder()
+        .completion_type(CompletionType::List)
+        .build();
+    let mut rl = Editor::with_config(config).unwrap();
+
     rl.set_helper(Some(completer::CommandCompleter::new()));
     loop{
         let input = rl.readline("$ ");
