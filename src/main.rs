@@ -9,6 +9,7 @@ mod command;
 mod lexer;
 mod env;
 mod completer;
+mod trie;
 
 use command::{ Command };
 

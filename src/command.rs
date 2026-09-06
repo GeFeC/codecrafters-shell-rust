@@ -76,8 +76,8 @@ pub enum Kind{
     Type,
     #[strum(to_string = "cd")]
     Cd,
-    #[strum(disabled)]
-    Executable{ name: String, path: String }
+    #[strum(to_string = "")]
+    Executable{ name: String, path: String },
 }
 
 impl Command{
@@ -169,7 +169,7 @@ impl Command{
 
         let Output{ stdout, stderr } = result;
 
-        if self.redirection.is_none(){
+        let Some(redirection) = self.redirection else{
             if !stdout.is_empty(){
                 println!("{stdout}");
             }
@@ -177,9 +177,8 @@ impl Command{
                 println!("{stderr}");
             }
             return ExecutionStatus::Continue;
-        }
+        };
 
-        let redirection = self.redirection.unwrap();
         if !matches!(redirection.target, RedirectionTarget::Stdout(_)) && !stdout.is_empty(){
             println!("{stdout}");
         }
@@ -256,7 +255,7 @@ mod tests{
     }
 
     #[test]
-    fn test_empty_stderr_redirection(){
+    fn test_stderr_redirection(){
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("fruits.txt");
 

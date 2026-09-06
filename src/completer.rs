@@ -5,20 +5,26 @@ use rustyline::highlight::Highlighter;
 use rustyline::{Context, Result, Helper};
 use strum::VariantNames;
 
-use crate::command::Kind;
+use crate::trie::Trie;
+use crate::command;
 use crate::env;
 
 pub struct CommandCompleter{
-    commands: Vec<String>
+    commands: Trie
 }
 
 impl CommandCompleter{
     pub fn new() -> Self{
+        let executables = env::get_all_executables();
+        let executables = executables.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+
+        let commands = [
+            command::Kind::VARIANTS,
+            &executables
+        ].concat();
+
         Self{
-            commands: [
-                Kind::VARIANTS.iter().map(|&s| s.to_string()).collect(),
-                env::get_all_executables(),
-            ].concat()
+            commands: Trie::from(&commands)
         }
     }
 }
@@ -34,15 +40,14 @@ impl Completer for CommandCompleter{
     ) -> Result<(usize, Vec<Self::Candidate>)>{
         let input = &line[..pos];
 
-        let mut matches = Vec::new();
-        for cmd in &self.commands{
-            if cmd.starts_with(input){
-                matches.push(Pair{
-                    display: format!("{cmd} "),
-                    replacement: format!("{cmd} ")
-                })
-            }
-        }
+        let matches = self.commands.all_starting_with(input);
+        let matches = matches.iter().map(|s| {
+            let s = format!("{s} "); 
+            Pair{ 
+                display: s.clone(), 
+                replacement: s
+            } 
+        }).collect::<Vec<_>>();
 
         Ok((0, matches))
     }
@@ -56,4 +61,14 @@ impl Validator for CommandCompleter{}
 impl Helper for CommandCompleter{}
 impl Highlighter for CommandCompleter{}
 
+#[cfg(test)]
+mod tests{
+    use super::*;
 
+    #[test]
+    fn test_exit_match(){
+        let completer = CommandCompleter::new();
+        let result = completer.commands.all_starting_with("exit");
+        assert!(!result.is_empty());
+    }
+}
