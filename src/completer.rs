@@ -44,10 +44,9 @@ impl Completer for CommandCompleter{
         let mut matches = self.commands.all_starting_with(input);
         matches.sort();
         let matches = matches.iter().map(|s| {
-            let s = s.to_string();
             Pair{ 
-                display: s.clone(), 
-                replacement: s
+                display: s.to_string(), 
+                replacement: format!("{} ", s)
             } 
         }).collect::<Vec<_>>();
 
