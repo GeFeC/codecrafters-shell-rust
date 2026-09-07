@@ -64,15 +64,30 @@ impl Completer{
     fn complete_using_script(&self, input: &str, pos: usize, script_path: &str) -> CompletionResult{
         let Ok(command) = lexer::split_command(input) else {
             return Ok((pos, vec![]));
-        };
+        };  
 
         let Some(command_name) = command.first() else {
             return Ok((pos, vec![]));
         };
 
         let args = match &command[1..]{
-            [.., prev, current] => vec![current.clone(), prev.clone()],
-            [.., prev] => vec![Token::Arg("".to_string()), prev.clone()],
+            [.., prev, current] => {
+                if input.ends_with(' '){
+                    vec![Token::Arg(String::new()), current.clone()]
+                }
+                else{
+                    vec![current.clone(), prev.clone()]
+                }
+
+            },
+            [.., current] => {
+                if input.ends_with(' '){
+                    vec![Token::Arg(String::new()), current.clone()]
+                }
+                else{
+                    vec![]
+                }
+            },
             _ => vec![],
         };
 
