@@ -94,7 +94,7 @@ impl Completer{
         let args = [vec![command_name.clone()], args].concat();
 
         let completions = Shell::execute_process(script_path, &args, command::OutputType::Redirect).stdout
-            .split('\n')
+            .lines()
             .map(|s| Pair{ display: s.to_string(), replacement: format!("{s} ") })
             .collect::<Vec<_>>();
 
