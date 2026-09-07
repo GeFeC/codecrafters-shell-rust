@@ -1,6 +1,6 @@
 use crate::command::{Command, CommandArgs, OutputType, Output};
 use crate::command;
-use crate::lexer::{ tokens_to_string };
+use crate::lexer::{ tokens_to_string, Token };
 use std::env;
 use std::path::Path;
 
@@ -75,6 +75,13 @@ pub fn execute_process(executable: &str, args: &CommandArgs, output_type: Output
                 Err(err) => { println!("{err}"); Output::empty() }
             }
         }
+    }
+}
+
+pub fn execute_complete(args: &CommandArgs) -> Output{
+    match args{
+        [_, Token::Arg(cmd), ..] => Output::stderr(&format!("complete: {}: no completion specification", cmd)),
+        _ => Output::stderr("Usage: complete -p <command>")
     }
 }
 

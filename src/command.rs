@@ -166,7 +166,7 @@ impl Command{
             Kind::Type => commands_execution::execute_type(&self.args),
             Kind::Pwd => commands_execution::execute_pwd(),
             Kind::Cd => commands_execution::execute_cd(&self.args),
-            Kind::Complete => todo!(),
+            Kind::Complete => commands_execution::execute_complete(&self.args),
             Kind::Executable{ name, .. } => commands_execution::execute_process(&name, &self.args, output_type),
         };
 
