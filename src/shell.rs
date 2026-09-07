@@ -2,13 +2,11 @@ use crate::{completer};
 use crate::command::{Command};
 use rustyline::{ CompletionType, Config, history::DefaultHistory };
 use rustyline::error::{ReadlineError};
-use std::collections::HashMap;
 
-type Editor = rustyline::Editor<completer::CommandCompleter, DefaultHistory>;
+type Editor = rustyline::Editor<completer::Completer, DefaultHistory>;
 
 pub struct Shell{
-    editor: Editor,
-    pub completions_paths: HashMap<String, String>
+    pub editor: Editor,
 }
 
 impl Shell{
@@ -19,15 +17,14 @@ impl Shell{
         let mut editor = Editor::with_config(config)
             .map_err(|err| format!("{err}"))?;
 
-        editor.set_helper(Some(completer::CommandCompleter::new()));
+        editor.set_helper(Some(completer::Completer::new()));
 
         Ok(editor)
     }
 
     pub fn new() -> Result<Self, String>{
         Ok(Self{
-            editor: Self::new_editor()?,
-            completions_paths: HashMap::new()
+            editor: Self::new_editor()?
         })
     }
 

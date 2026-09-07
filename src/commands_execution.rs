@@ -23,7 +23,7 @@ impl Shell{
             command::Kind::Pwd => self.execute_pwd(),
             command::Kind::Cd => self.execute_cd(&command.args),
             command::Kind::Complete => self.execute_complete(&command.args),
-            command::Kind::Executable{ name, .. } => self.execute_process(&name, &command.args, output_type),
+            command::Kind::Executable{ name, .. } => Self::execute_process(&name, &command.args, output_type),
         };
 
         let Output{ stdout, stderr } = &result;
@@ -89,14 +89,16 @@ impl Shell{
     }
 
     fn execute_complete(&mut self, args: &CommandArgs) -> Output{
+        let completions_paths = &mut self.editor.helper_mut().unwrap().completions_paths;
+
         match args{
             [Token::Arg(flag), Token::Arg(path), Token::Arg(cmd), ..] if flag == "-C" => {
-                self.completions_paths.insert(cmd.clone(), path.clone());
+                completions_paths.insert(cmd.clone(), path.clone());
                 Output::empty()
             },
 
             [Token::Arg(flag), Token::Arg(cmd), ..] if flag == "-p" => {
-                match self.completions_paths.get(cmd){
+                match completions_paths.get(cmd){
                     Some(path) => Output::stdout(&format!("complete -C '{path}' {cmd}")),
                     None => Output::stdout(&format!("complete: {}: no completion specification", cmd))
                 }
@@ -105,7 +107,7 @@ impl Shell{
         }
     }
 
-    fn execute_process(&self, executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
+    pub fn execute_process(executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
         let mut command = std::process::Command::new(executable);
         if !args.is_empty(){
             command.args(args.iter().map(|t| t.to_string()));

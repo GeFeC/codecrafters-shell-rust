@@ -1,20 +1,24 @@
-use rustyline::completion::{Completer, Pair, FilenameCompleter};
+use std::collections::HashMap;
+
+use rustyline::completion::{Pair, FilenameCompleter, Completer as ICompleter};
 use rustyline::validate::Validator;
 use rustyline::hint::Hinter;
 use rustyline::highlight::Highlighter;
 use rustyline::{Context, Result, Helper};
 use strum::VariantNames;
 
+use crate::shell::Shell;
 use crate::trie::Trie;
 use crate::command;
 use crate::env;
 
-pub struct CommandCompleter{
+pub struct Completer{
     commands: Trie,
-    filename_completer: FilenameCompleter
+    filename_completer: FilenameCompleter,
+    pub completions_paths: HashMap<String, String>
 }
 
-impl CommandCompleter{
+impl Completer{
     pub fn new() -> Self{
         let executables = env::get_all_executables();
         let executables = executables.iter().map(|s| s.as_str()).collect::<Vec<_>>();
@@ -26,12 +30,13 @@ impl CommandCompleter{
 
         Self{
             commands: Trie::from(&commands),
-            filename_completer: FilenameCompleter::new()
+            filename_completer: FilenameCompleter::new(),
+            completions_paths: HashMap::new()
         }
     }
 }
 
-impl Completer for CommandCompleter{
+impl ICompleter for Completer{
     type Candidate = Pair;
 
     fn complete(
@@ -43,6 +48,15 @@ impl Completer for CommandCompleter{
 
         let input = &line[..pos].trim_start();
         if input.contains(' '){
+            if let Some(path) = self.completions_paths.get(&input.to_string()){
+                let completions = Shell::execute_process(path, &[], command::OutputType::Redirect).stdout
+                    .split('\n')
+                    .map(|s| Pair{ display: s.to_string(), replacement: s.to_string() })
+                    .collect::<Vec<_>>();
+
+                return Ok((pos, completions));
+            }
+
             let (idx, mut matches) = self.filename_completer.complete_path(line, pos)?;
 
             for m in &mut matches{
@@ -81,13 +95,13 @@ impl Completer for CommandCompleter{
     }
 }
 
-impl Hinter for CommandCompleter{
+impl Hinter for Completer{
     type Hint = String;
 }
 
-impl Validator for CommandCompleter{}
-impl Helper for CommandCompleter{}
-impl Highlighter for CommandCompleter{}
+impl Validator for Completer{}
+impl Helper for Completer{}
+impl Highlighter for Completer{}
 
 #[cfg(test)]
 mod tests{
@@ -95,7 +109,7 @@ mod tests{
 
     #[test]
     fn test_exit_match(){
-        let completer = CommandCompleter::new();
+        let completer = Completer::new();
         let result = completer.commands.all_starting_with("exit");
         assert!(!result.is_empty());
     }
