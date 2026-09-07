@@ -48,7 +48,7 @@ impl ICompleter for Completer{
 
         let input = &line[..pos].trim_start();
         if input.contains(' '){
-            if let Some(path) = self.completions_paths.get(&input.to_string()){
+            if let Some(path) = self.completions_paths.get(input.trim_end()){
                 let completions = Shell::execute_process(path, &[], command::OutputType::Redirect).stdout
                     .split('\n')
                     .map(|s| Pair{ display: s.to_string(), replacement: s.to_string() })
