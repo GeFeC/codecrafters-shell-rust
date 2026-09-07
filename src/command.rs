@@ -76,6 +76,8 @@ pub enum Kind{
     Type,
     #[strum(to_string = "cd")]
     Cd,
+    #[strum(to_string = "complete")]
+    Complete,
     #[strum(to_string = "")]
     Executable{ name: String, path: String },
 }
@@ -159,12 +161,13 @@ impl Command{
         };
 
         let result = match self.r#type{
+            Kind::Exit => unreachable!(),
             Kind::Echo => commands_execution::execute_echo(&self.args),
             Kind::Type => commands_execution::execute_type(&self.args),
             Kind::Pwd => commands_execution::execute_pwd(),
             Kind::Cd => commands_execution::execute_cd(&self.args),
+            Kind::Complete => todo!(),
             Kind::Executable{ name, .. } => commands_execution::execute_process(&name, &self.args, output_type),
-            _ => Output::empty()
         };
 
         let Output{ stdout, stderr } = result;
