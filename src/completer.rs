@@ -80,15 +80,15 @@ impl Completer{
                 }
 
             },
-            [.., current] => {
+            [current] => {
                 if input.ends_with(' '){
                     vec![Token::Arg(String::new()), current.clone()]
                 }
                 else{
-                    vec![Token::Arg(String::new()), Token::Arg(String::new())]
+                    vec![current.clone(), command_name.clone()]
                 }
             },
-            _ => vec![],
+            _ => vec![Token::Arg(String::new()), Token::Arg(String::new())],
         };
 
         let args = [vec![command_name.clone()], args].concat();
