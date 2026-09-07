@@ -71,23 +71,9 @@ impl Completer{
         };
 
         let args = match &command[1..]{
-            [.., prev, current] => {
-                if input.ends_with(' '){
-                    vec![Token::Arg(String::new()), current.clone()]
-                }
-                else{
-                    vec![current.clone(), prev.clone()]
-                }
-
-            },
-            [current] => {
-                if input.ends_with(' '){
-                    vec![Token::Arg(String::new()), current.clone()]
-                }
-                else{
-                    vec![current.clone(), command_name.clone()]
-                }
-            },
+            [.., current] if input.ends_with(' ') => vec![Token::Arg(String::new()), current.clone()],
+            [.., prev, current] => vec![current.clone(), prev.clone()],
+            [current] => vec![current.clone(), command_name.clone()],
             _ => vec![Token::Arg(String::new()), Token::Arg(String::new())],
         };
 
