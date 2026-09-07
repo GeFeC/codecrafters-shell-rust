@@ -85,7 +85,7 @@ impl Completer{
                     vec![Token::Arg(String::new()), current.clone()]
                 }
                 else{
-                    vec![]
+                    vec![Token::Arg(String::new()), Token::Arg(String::new())]
                 }
             },
             _ => vec![],
