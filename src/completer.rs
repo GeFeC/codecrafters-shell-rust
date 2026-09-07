@@ -51,7 +51,7 @@ impl ICompleter for Completer{
             if let Some(path) = self.completions_paths.get(input.trim_end()){
                 let completions = Shell::execute_process(path, &[], command::OutputType::Redirect).stdout
                     .split('\n')
-                    .map(|s| Pair{ display: s.to_string(), replacement: s.to_string() })
+                    .map(|s| Pair{ display: s.to_string(), replacement: format!("{s} ") })
                     .collect::<Vec<_>>();
 
                 return Ok((pos, completions));
