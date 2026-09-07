@@ -1,87 +1,137 @@
-use crate::command::{Command, CommandArgs, OutputType, Output};
+use crate::command::{Command, CommandArgs, ExecutionStatus, Output, OutputType};
 use crate::command;
 use crate::lexer::{ tokens_to_string, Token };
+use crate::shell::Shell;
 use std::env;
 use std::path::Path;
 
-pub fn execute_echo(args: &CommandArgs) -> Output{
-    Output::stdout(&tokens_to_string(args))
-}
+impl Shell{
+    pub fn execute_command(&mut self, command: Command) -> ExecutionStatus{
+        if let command::Kind::Exit = command.r#type{
+            return ExecutionStatus::Exit;
+        } 
 
-pub fn execute_pwd() -> Output{
-    Output::stdout(&format!("{}", env::current_dir().unwrap().display()))
-}
+        let output_type = match command.redirection{
+            None => OutputType::Display,
+            Some(_) => OutputType::Redirect,
+        };
 
-pub fn execute_cd(args: &CommandArgs) -> Output{
-    let home_dir = env::home_dir();
+        let result = match command.r#type{
+            command::Kind::Exit => unreachable!(),
+            command::Kind::Echo => self.execute_echo(&command.args),
+            command::Kind::Type => self.execute_type(&command.args),
+            command::Kind::Pwd => self.execute_pwd(),
+            command::Kind::Cd => self.execute_cd(&command.args),
+            command::Kind::Complete => self.execute_complete(&command.args),
+            command::Kind::Executable{ name, .. } => self.execute_process(&name, &command.args, output_type),
+        };
 
-    let path = tokens_to_string(args);
-    let path = match path.as_str(){
-        "~" | "" => home_dir.as_deref().and_then(Path::to_str).unwrap_or("~").to_owned(),
-        _ => path
-    };
+        let Output{ stdout, stderr } = &result;
 
-    if env::set_current_dir(&path).is_err(){
-        return Output::stderr(&format!("cd: {}: No such file or directory", path));
+        let Some(redirection) = command.redirection else{
+            if !stdout.is_empty(){
+                println!("{stdout}");
+            }
+            if !stderr.is_empty(){
+                println!("{stderr}");
+            }
+            return ExecutionStatus::Continue;
+        };
+
+        result.redirect(redirection);
+
+        ExecutionStatus::Continue
     }
 
-    Output::empty()
-}
-
-pub fn execute_type(checked_cmd: &CommandArgs) -> Output{
-    if checked_cmd.len() != 1{
-        return Output::stderr("Usage: type <command name without args>");
+    fn execute_echo(&self, args: &CommandArgs) -> Output{
+        Output::stdout(&tokens_to_string(args))
     }
 
-    let cmd_name = checked_cmd.first().unwrap().to_string();
-    let command = Command::from_str(&cmd_name);
-
-    if command.is_err(){
-        return Output::stderr(&format!("{}: not found", cmd_name));
+    fn execute_pwd(&self) -> Output{
+        Output::stdout(&format!("{}", env::current_dir().unwrap().display()))
     }
 
-    let command = command.unwrap();
+    fn execute_cd(&self, args: &CommandArgs) -> Output{
+        let home_dir = env::home_dir();
 
-    if let command::Kind::Executable { path, .. } = command.r#type{
-        return Output::stdout(&format!("{} is {}", cmd_name, path));
+        let path = tokens_to_string(args);
+        let path = match path.as_str(){
+            "~" | "" => home_dir.as_deref().and_then(Path::to_str).unwrap_or("~").to_owned(),
+            _ => path
+        };
+
+        if env::set_current_dir(&path).is_err(){
+            return Output::stderr(&format!("cd: {}: No such file or directory", path));
+        }
+
+        Output::empty()
     }
 
-    Output::stdout(&format!("{} is a shell builtin", cmd_name))
-}
+    fn execute_type(&self, checked_cmd: &CommandArgs) -> Output{
+        if checked_cmd.len() != 1{
+            return Output::stderr("Usage: type <command name without args>");
+        }
 
-pub fn execute_process(executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
-    let mut command = std::process::Command::new(executable);
-    if !args.is_empty(){
-        command.args(args.iter().map(|t| t.to_string()));
+        let cmd_name = checked_cmd.first().unwrap().to_string();
+        let command = Command::from_str(&cmd_name);
+
+        if command.is_err(){
+            return Output::stderr(&format!("{}: not found", cmd_name));
+        }
+
+        let command = command.unwrap();
+
+        if let command::Kind::Executable { path, .. } = command.r#type{
+            return Output::stdout(&format!("{} is {}", cmd_name, path));
+        }
+
+        Output::stdout(&format!("{} is a shell builtin", cmd_name))
     }
-    
-    match output_type{
-        OutputType::Redirect => {
-            match command.output(){
-                Ok(output) => Output{
-                        stdout: std::str::from_utf8(&output.stdout).unwrap().trim().to_string(),
-                        stderr: std::str::from_utf8(&output.stderr).unwrap().trim().to_string()
-                    },
 
-                Err(err) => Output{
-                    stdout: String::new(),
-                    stderr: format!("{err}")
+    fn execute_complete(&mut self, args: &CommandArgs) -> Output{
+        match args{
+            [Token::Arg(flag), Token::Arg(path), Token::Arg(cmd), ..] if flag == "-C" => {
+                self.completions_paths.insert(cmd.clone(), path.clone());
+                Output::empty()
+            },
+
+            [Token::Arg(flag), Token::Arg(cmd), ..] if flag == "-p" => {
+                match self.completions_paths.get(cmd){
+                    Some(path) => Output::stdout(&format!("complete -C '{path}' {cmd}")),
+                    None => Output::stdout(&format!("complete: {}: no completion specification", cmd))
                 }
-            }
-        },
-        OutputType::Display => {
-            match command.spawn().and_then(|mut c| c.wait()){
-                Ok(_) => { Output::empty() },
-                Err(err) => { println!("{err}"); Output::empty() }
-            }
+            },
+            _ => Output::stderr("Usage: complete <'-p' or '-C'> <command>")
         }
     }
-}
 
-pub fn execute_complete(args: &CommandArgs) -> Output{
-    match args{
-        [_, Token::Arg(cmd), ..] => Output::stderr(&format!("complete: {}: no completion specification", cmd)),
-        _ => Output::stderr("Usage: complete -p <command>")
+    fn execute_process(&self, executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
+        let mut command = std::process::Command::new(executable);
+        if !args.is_empty(){
+            command.args(args.iter().map(|t| t.to_string()));
+        }
+        
+        match output_type{
+            OutputType::Redirect => {
+                match command.output(){
+                    Ok(output) => Output{
+                            stdout: std::str::from_utf8(&output.stdout).unwrap().trim().to_string(),
+                            stderr: std::str::from_utf8(&output.stderr).unwrap().trim().to_string()
+                        },
+
+                    Err(err) => Output{
+                        stdout: String::new(),
+                        stderr: format!("{err}")
+                    }
+                }
+            },
+            OutputType::Display => {
+                match command.spawn().and_then(|mut c| c.wait()){
+                    Ok(_) => { Output::empty() },
+                    Err(err) => { println!("{err}"); Output::empty() }
+                }
+            }
+        }
     }
 }
 
@@ -91,7 +141,8 @@ mod test{
     use crate::lexer::Token;
 
     fn test_type_helper(cmd: &str) -> Output{
-        execute_type(&[Token::Arg(cmd.to_owned())])
+        let shell = Shell::new().unwrap();
+        shell.execute_type(&[Token::Arg(cmd.to_owned())])
     }
 
     #[test]
