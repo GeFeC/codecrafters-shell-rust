@@ -120,7 +120,7 @@ impl Shell{
             OutputType::Both => {
                 match program.spawn(){
                     Ok(child) => {
-                        let output = format!("[1] : {}", child.id());
+                        let output = format!("[1] {}", child.id());
                         Output::stdout(&output)
                     },
                     Err(err) => {
