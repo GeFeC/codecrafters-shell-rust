@@ -4,13 +4,28 @@ use crate::{completer};
 use crate::command::{Command};
 use rustyline::{ CompletionType, Config, history::DefaultHistory };
 use rustyline::error::{ReadlineError};
+use std::sync::atomic::AtomicU32;
 
 type Editor = rustyline::Editor<completer::Completer, DefaultHistory>;
 
 pub struct Job{
+    pub idx: u32,
     pub finished: bool,
     pub process: Child,
     pub command: String
+}
+
+impl Job{
+    pub fn new(process: Child, command: String) -> Self{
+        static COUNTER: AtomicU32 = AtomicU32::new(1);
+
+        Self{
+            idx: COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            finished: false,
+            process,
+            command
+        }
+    }
 }
 
 pub struct Shell{

@@ -64,7 +64,7 @@ impl Shell{
 
                 job.finished = has_finished;
 
-                format!("[{}]{}  {:24}{}\n", idx + 1, symbol, state_name, job.command)
+                format!("[{}]{}  {:24}{}\n", job.idx, symbol, state_name, job.command)
             })
             .collect::<Vec<_>>()
             .join("");
@@ -147,9 +147,11 @@ impl Shell{
         let command = format!("{} {}", executable, stringify_args(args));
 
         let pid = proc.id();
-        self.jobs.push(Job{ process: proc, command, finished: false });
+        let job = Job::new(proc, command);
+        let job_idx = job.idx;
+        self.jobs.push(job);
 
-        Output::stdout(&format!("[{}] {}", self.jobs.len(), pid))
+        Output::stdout(&format!("[{}] {}", job_idx, pid))
     }
 
     pub fn execute_program(&mut self, executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
