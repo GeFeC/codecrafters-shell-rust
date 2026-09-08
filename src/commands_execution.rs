@@ -5,6 +5,7 @@ use crate::shell::{Shell, Job};
 use crate::program::Program;
 use std::env;
 use std::path::Path;
+use std::process::Child;
 
 impl Shell{
     pub fn execute_command(&mut self, command: Command) -> ExecutionStatus{
@@ -43,10 +44,10 @@ impl Shell{
         ExecutionStatus::Continue
     }
 
-    fn execute_jobs(&self) -> Output{
+    fn execute_jobs(&mut self) -> Output{
         let total_jobs = self.jobs.len();
 
-        let output = self.jobs.iter()
+        let output = self.jobs.iter_mut()
             .enumerate()
             .map(|(idx, job)| {
                 let symbol = match idx{
@@ -54,11 +55,21 @@ impl Shell{
                     _ if idx + 2 == total_jobs => '-',
                     _ => ' '
                 };
-                format!("[{}]{}  Running{:17}{}\n", idx + 1, symbol, "", job.command)
+
+                let (state_name, has_finished) = match job.process.try_wait(){
+                    Ok(Some(_)) => ("Done", true),
+                    Ok(None) => ("Running", false),
+                    Err(_err) => todo!()
+                };
+
+                job.finished = has_finished;
+
+                format!("[{}]{}  {:24}{}\n", idx + 1, symbol, state_name, job.command)
             })
             .collect::<Vec<_>>()
             .join("");
-            
+
+        self.jobs.retain(|j| !j.finished);
 
         Output::stdout(output.trim_end())
     }
@@ -132,10 +143,11 @@ impl Shell{
         }
     }
 
-    fn start_job(&mut self, executable: &str, args: &CommandArgs, pid: u32) -> Output{
+    fn start_job(&mut self, executable: &str, args: &CommandArgs, proc: Child) -> Output{
         let command = format!("{} {}", executable, stringify_args(args));
 
-        self.jobs.push(Job{ pid, command });
+        let pid = proc.id();
+        self.jobs.push(Job{ process: proc, command, finished: false });
 
         Output::stdout(&format!("[{}] {}", self.jobs.len(), pid))
     }
@@ -147,7 +159,7 @@ impl Shell{
         match output_type{
             OutputType::Both => {
                 match program.spawn(){
-                    Ok(child) => self.start_job(executable, args, child.id()),
+                    Ok(child) => self.start_job(executable, args, child),
                     Err(err) => {
                         eprintln!("{err}");
                         Output::empty()

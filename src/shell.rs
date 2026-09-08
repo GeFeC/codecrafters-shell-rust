@@ -1,3 +1,5 @@
+use std::process::Child;
+
 use crate::{completer};
 use crate::command::{Command};
 use rustyline::{ CompletionType, Config, history::DefaultHistory };
@@ -6,7 +8,8 @@ use rustyline::error::{ReadlineError};
 type Editor = rustyline::Editor<completer::Completer, DefaultHistory>;
 
 pub struct Job{
-    pub pid: u32,
+    pub finished: bool,
+    pub process: Child,
     pub command: String
 }
 
