@@ -120,7 +120,7 @@ use super::*;
     use std::fs;
 
     fn execute(cmd: &str){
-        let shell = Shell::new().unwrap();
+        let mut shell = Shell::new().unwrap();
         let command = Command::from_str(cmd).unwrap();
 
         shell.execute_command(command);

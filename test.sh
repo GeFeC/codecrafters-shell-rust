@@ -1,1 +1,0 @@
-echo "Well well well"

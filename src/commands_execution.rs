@@ -2,6 +2,7 @@ use crate::command::{Command, CommandArgs, ExecutionStatus, Output, OutputType};
 use crate::command;
 use crate::lexer::{ tokens_to_string, Token };
 use crate::shell::Shell;
+use crate::program::Program;
 use std::env;
 use std::path::Path;
 
@@ -23,7 +24,7 @@ impl Shell{
             command::Kind::Pwd => self.execute_pwd(),
             command::Kind::Cd => self.execute_cd(&command.args),
             command::Kind::Complete => self.execute_complete(&command.args),
-            command::Kind::Executable{ name, .. } => Self::execute_process(&name, &command.args, output_type),
+            command::Kind::Executable{ name, .. } => Self::execute_program(&name, &command.args, output_type),
         };
 
         let Output{ stdout, stderr } = &result;
@@ -107,31 +108,15 @@ impl Shell{
         }
     }
 
-    pub fn execute_process(executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
-        let mut command = std::process::Command::new(executable);
-        if !args.is_empty(){
-            command.args(args.iter().map(|t| t.to_string()));
-        }
+    pub fn execute_program(executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
+        let mut program = Program::new(executable)
+            .args(args);
         
         match output_type{
-            OutputType::Redirect => {
-                match command.output(){
-                    Ok(output) => Output{
-                            stdout: std::str::from_utf8(&output.stdout).unwrap().trim().to_string(),
-                            stderr: std::str::from_utf8(&output.stderr).unwrap().trim().to_string()
-                        },
-
-                    Err(err) => Output{
-                        stdout: String::new(),
-                        stderr: format!("{err}")
-                    }
-                }
-            },
+            OutputType::Redirect => program.output(),
             OutputType::Display => {
-                match command.spawn().and_then(|mut c| c.wait()){
-                    Ok(_) => { Output::empty() },
-                    Err(err) => { println!("{err}"); Output::empty() }
-                }
+                program.spawn_and_wait();
+                Output::empty()
             }
         }
     }

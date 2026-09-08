@@ -8,7 +8,7 @@ use rustyline::{Context, Result, Helper};
 use strum::VariantNames;
 use lexer::Token;
 
-use crate::shell::Shell;
+use crate::program::Program;
 use crate::trie::Trie;
 use crate::{command, lexer};
 use crate::env;
@@ -78,8 +78,16 @@ impl Completer{
         };
 
         let args = [vec![command_name.clone()], args].concat();
+        let envs = [
+            ("COMP_LINE", input),
+            ("COMP_POINT", &format!("{pos}"))
+        ].into_iter().map(|(var, value)| (var.to_string(), value.to_string())).collect::<Vec<_>>();
 
-        let completions = Shell::execute_process(script_path, &args, command::OutputType::Redirect).stdout
+        let completions = Program::new(script_path)
+            .args(&args)
+            .envs(&envs)
+            .output()
+            .stdout
             .lines()
             .map(|s| Pair{ display: s.to_string(), replacement: format!("{s} ") })
             .collect::<Vec<_>>();

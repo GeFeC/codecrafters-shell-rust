@@ -4,8 +4,8 @@ use std::fs::{ OpenOptions };
 use std::io::Write;
 
 pub struct Redirection{
-    target: RedirectionTarget,
-    r#type: RedirectionType
+    pub target: RedirectionTarget,
+    pub r#type: RedirectionType
 }
 
 pub enum RedirectionTarget{

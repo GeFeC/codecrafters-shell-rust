@@ -6,6 +6,7 @@ mod completer;
 mod trie;
 mod shell;
 mod output_redirection;
+mod program;
 
 use shell::Shell;
 
