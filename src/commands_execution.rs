@@ -1,7 +1,7 @@
-use crate::command::{Command, CommandArgs, ExecutionStatus, Output, OutputType};
+use crate::command::{Command, CommandArgs, ExecutionStatus, Output, OutputType, stringify_args};
 use crate::command;
 use crate::lexer::{ tokens_to_string, Token };
-use crate::shell::Shell;
+use crate::shell::{Shell, Job};
 use crate::program::Program;
 use std::env;
 use std::path::Path;
@@ -29,8 +29,8 @@ impl Shell{
             command::Kind::Pwd => self.execute_pwd(),
             command::Kind::Cd => self.execute_cd(cmd_args),
             command::Kind::Complete => self.execute_complete(cmd_args),
-            command::Kind::Jobs => Output::empty(),
-            command::Kind::Executable{ name, .. } => Self::execute_program(&name, cmd_args, output_type),
+            command::Kind::Jobs => self.execute_jobs(),
+            command::Kind::Executable{ name, .. } => self.execute_program(&name, cmd_args, output_type),
         };
 
         let Some(redirection) = command.redirection else{
@@ -41,6 +41,20 @@ impl Shell{
         result.redirect(redirection);
 
         ExecutionStatus::Continue
+    }
+
+    fn execute_jobs(&self) -> Output{
+        let [rest @ .., last] = &self.jobs[..] else{ return Output::empty(); };
+
+        let out_rest = rest.iter()
+            .enumerate()
+            .map(|(idx, job)| format!("[{}]   Running{}{}\n", idx + 1, " ".repeat(17), job.command))
+            .collect::<Vec<_>>()
+            .join("");
+
+        let out_last = format!("[{}]+  Running{}{}", self.jobs.len(), " ".repeat(17), last.command);
+
+        Output::stdout(&format!("{}{}", out_rest, out_last))
     }
 
     fn execute_echo(&self, args: &CommandArgs) -> Output{
@@ -112,17 +126,22 @@ impl Shell{
         }
     }
 
-    pub fn execute_program(executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
+    fn start_job(&mut self, executable: &str, args: &CommandArgs, pid: u32) -> Output{
+        let command = format!("{} {}", executable, stringify_args(args));
+
+        self.jobs.push(Job{ pid, command });
+
+        Output::stdout(&format!("[{}] {}", self.jobs.len(), pid))
+    }
+
+    pub fn execute_program(&mut self, executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
         let mut program = Program::new(executable)
             .args(args);
         
         match output_type{
             OutputType::Both => {
                 match program.spawn(){
-                    Ok(child) => {
-                        let output = format!("[1] {}", child.id());
-                        Output::stdout(&output)
-                    },
+                    Ok(child) => self.start_job(executable, args, child.id()),
                     Err(err) => {
                         eprintln!("{err}");
                         Output::empty()

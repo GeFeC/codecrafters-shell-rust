@@ -9,6 +9,10 @@ use crate::output_redirection::{Redirection};
 pub type CommandArgs = [lexer::Token];
 pub type CommandArgsStorage = Vec<lexer::Token>;
 
+pub fn stringify_args(args: &CommandArgs) -> String{
+    args.iter().map(|arg| format!("{arg}")).collect::<Vec<_>>().join(" ")
+}
+
 pub struct Command{
     pub r#type: Kind,
     pub args: CommandArgsStorage,

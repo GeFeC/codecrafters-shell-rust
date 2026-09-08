@@ -5,8 +5,14 @@ use rustyline::error::{ReadlineError};
 
 type Editor = rustyline::Editor<completer::Completer, DefaultHistory>;
 
+pub struct Job{
+    pub pid: u32,
+    pub command: String
+}
+
 pub struct Shell{
     pub editor: Editor,
+    pub jobs: Vec<Job>
 }
 
 impl Shell{
@@ -24,7 +30,8 @@ impl Shell{
 
     pub fn new() -> Result<Self, String>{
         Ok(Self{
-            editor: Self::new_editor()?
+            editor: Self::new_editor()?,
+            jobs: Vec::with_capacity(32)
         })
     }
 
