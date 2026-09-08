@@ -1,10 +1,9 @@
 use crate::command::{Command, CommandArgs, ExecutionStatus, Output, OutputType};
 use crate::command;
 use crate::lexer::{ tokens_to_string, Token };
-use crate::shell::{Job, JobState, Shell};
+use crate::shell::{JobState, Shell};
 use crate::program::Program;
 use std::env;
-use std::io::{self, Write};
 use std::path::Path;
 use std::process::Child;
 
@@ -134,7 +133,7 @@ impl Shell{
         let command = format!("{} {}", executable, tokens_to_string(args));
 
         let pid = proc.id();
-        let job = Job::new(proc, command);
+        let job = self.new_job(proc, command);
         let job_idx = job.idx;
         self.jobs.push(job);
 

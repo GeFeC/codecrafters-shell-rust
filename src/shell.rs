@@ -4,7 +4,6 @@ use crate::{completer};
 use crate::command::{Command};
 use rustyline::{ CompletionType, Config, history::DefaultHistory };
 use rustyline::error::{ReadlineError};
-use std::sync::atomic::AtomicU32;
 use strum_macros::EnumString;
 use strum_macros::Display;
 use std::string::ToString;
@@ -27,28 +26,33 @@ pub struct Job{
 }
 
 impl Job{
-    pub fn new(process: Child, command: String) -> Self{
-        static COUNTER: AtomicU32 = AtomicU32::new(1);
-
-        Self{
-            idx: COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-            state: JobState::Running,
-            process,
-            command
-        }
-    }
-
     pub fn display(&self, symbol: char) -> String{
         format!("[{}]{}  {:24}{}\n", self.idx, symbol, self.state.to_string(), self.command)
     }
 }
 
 pub struct Shell{
+    current_job_id: u32,
     pub editor: Editor,
     pub jobs: Vec<Job>
 }
 
 impl Shell{
+    pub fn new_job(&mut self, process: Child, command: String) -> Job{
+        if self.jobs.is_empty(){
+            self.current_job_id = 0;
+        }
+
+        self.current_job_id += 1;
+        
+        Job{
+            idx: self.current_job_id,
+            state: JobState::Running,
+            process,
+            command
+        }
+    }
+
     fn new_editor() -> Result<Editor, String>{
         let config = Config::builder()
             .completion_type(CompletionType::List)
@@ -63,6 +67,7 @@ impl Shell{
 
     pub fn new() -> Result<Self, String>{
         Ok(Self{
+            current_job_id: 0,
             editor: Self::new_editor()?,
             jobs: Vec::with_capacity(32)
         })
