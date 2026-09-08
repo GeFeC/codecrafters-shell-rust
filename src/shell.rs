@@ -39,9 +39,7 @@ pub struct Shell{
 
 impl Shell{
     pub fn new_job(&mut self, process: Child, command: String) -> Job{
-        if self.jobs.is_empty(){
-            self.current_job_id = 0;
-        }
+        self.current_job_id = self.jobs.iter().map(|j| j.idx).max().unwrap_or(0);
 
         self.current_job_id += 1;
         
