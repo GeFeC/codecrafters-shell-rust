@@ -1,6 +1,8 @@
 use crate::command::CommandArgs;
 use crate::command::Output;
+use std::error::Error;
 use std::process;
+use std::process::Child;
 
 pub struct Program{
     command: process::Command
@@ -32,6 +34,10 @@ impl Program{
         if let Err(err) = self.command.spawn().and_then(|mut c| c.wait()){
             println!("{err}");
         }
+    }
+
+    pub fn spawn(&mut self) -> Result<Child, impl Error>{
+        self.command.spawn()
     }
 
     fn stringify_output(output: &[u8]) -> String{

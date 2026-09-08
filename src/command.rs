@@ -43,9 +43,26 @@ impl Output{
     }
 }
 
+impl std::fmt::Display for Output{
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error>{
+        let stdout = match &self.stdout{
+            s if s.is_empty() => "",
+            s => &format!("{s}\n")
+        };
+
+        let stderr = match &self.stderr{
+            s if s.is_empty() => "",
+            s => &format!("{s}\n")
+        };
+
+        write!(fmt, "{}{}", stdout, stderr)
+    }
+}
+
 pub enum OutputType{
     Display,
-    Redirect
+    Redirect,
+    Both
 }
 
 #[derive(PartialEq, EnumString, VariantNames)]
@@ -72,30 +89,30 @@ impl Command{
     pub fn from_str(command: &str) -> Result<Command, String>{
         let command = lexer::split_command(command)?;
 
-        if let lexer::Token::Arg(command_name) = command.first().unwrap(){
-            let command_args = &command[1..];
+        let Some(lexer::Token::Arg(command_name)) = command.first() else {
+            return Err(String::from("Invalid command name"));
+        };
 
-            let (redirection, command_args) = output_redirection::get_redirection_and_new_command_args(
-                command_args.to_vec()
-            );
-            
-            let command_type = match Kind::from_str(command_name){
-                Ok(command) => Ok(command),
-                Err(_) if let Some(path) = env::find_in_path(command_name) => Ok(Kind::Executable{
-                    name: command_name.to_owned(),
-                    path
-                }),
-                Err(_) => Err(format!("{}: command not found", command_name))
-            };
+        let command_args = &command[1..];
 
-            return Ok(Command{
-                r#type: command_type?,
-                args: command_args,
-                redirection
-            });
-        }
+        let (redirection, command_args) = output_redirection::get_redirection_and_new_command_args(
+            command_args.to_vec()
+        );
+        
+        let command_type = match Kind::from_str(command_name){
+            Ok(command) => Ok(command),
+            Err(_) if let Some(path) = env::find_in_path(command_name) => Ok(Kind::Executable{
+                name: command_name.to_owned(),
+                path
+            }),
+            Err(_) => Err(format!("{}: command not found", command_name))
+        };
 
-        Err(String::from("Invalid command name"))
+        Ok(Command{
+            r#type: command_type?,
+            args: command_args,
+            redirection
+        })
     }
 }
 

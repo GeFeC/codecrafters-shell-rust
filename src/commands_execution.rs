@@ -12,31 +12,29 @@ impl Shell{
             return ExecutionStatus::Exit;
         } 
 
-        let output_type = match command.redirection{
-            None => OutputType::Display,
-            Some(_) => OutputType::Redirect,
+        let (output_type, cmd_args) = match &command.args[..]{
+            [rest @ .., Token::Arg(val)] if val == "&" => {
+                (OutputType::Both, rest)
+            },
+            _ => (match command.redirection{
+                None => OutputType::Display,
+                Some(_) => OutputType::Redirect,
+            }, &command.args[..])
         };
 
         let result = match command.r#type{
             command::Kind::Exit => unreachable!(),
-            command::Kind::Echo => self.execute_echo(&command.args),
-            command::Kind::Type => self.execute_type(&command.args),
+            command::Kind::Echo => self.execute_echo(cmd_args),
+            command::Kind::Type => self.execute_type(cmd_args),
             command::Kind::Pwd => self.execute_pwd(),
-            command::Kind::Cd => self.execute_cd(&command.args),
-            command::Kind::Complete => self.execute_complete(&command.args),
+            command::Kind::Cd => self.execute_cd(cmd_args),
+            command::Kind::Complete => self.execute_complete(cmd_args),
             command::Kind::Jobs => Output::empty(),
-            command::Kind::Executable{ name, .. } => Self::execute_program(&name, &command.args, output_type),
+            command::Kind::Executable{ name, .. } => Self::execute_program(&name, cmd_args, output_type),
         };
 
-        let Output{ stdout, stderr } = &result;
-
         let Some(redirection) = command.redirection else{
-            if !stdout.is_empty(){
-                println!("{stdout}");
-            }
-            if !stderr.is_empty(){
-                println!("{stderr}");
-            }
+            print!("{result}");
             return ExecutionStatus::Continue;
         };
 
@@ -119,6 +117,18 @@ impl Shell{
             .args(args);
         
         match output_type{
+            OutputType::Both => {
+                match program.spawn(){
+                    Ok(child) => {
+                        let output = format!("[1] : {}", child.id());
+                        Output::stdout(&output)
+                    },
+                    Err(err) => {
+                        eprintln!("{err}");
+                        Output::empty()
+                    }
+                }
+            }
             OutputType::Redirect => program.output(),
             OutputType::Display => {
                 program.spawn_and_wait();
