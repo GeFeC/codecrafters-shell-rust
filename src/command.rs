@@ -62,6 +62,8 @@ pub enum Kind{
     Cd,
     #[strum(to_string = "complete")]
     Complete,
+    #[strum(to_string = "jobs")]
+    Jobs,
     #[strum(to_string = "")]
     Executable{ name: String, path: String },
 }

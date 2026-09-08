@@ -24,6 +24,7 @@ impl Shell{
             command::Kind::Pwd => self.execute_pwd(),
             command::Kind::Cd => self.execute_cd(&command.args),
             command::Kind::Complete => self.execute_complete(&command.args),
+            command::Kind::Jobs => Output::empty(),
             command::Kind::Executable{ name, .. } => Self::execute_program(&name, &command.args, output_type),
         };
 
