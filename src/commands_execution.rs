@@ -104,7 +104,12 @@ impl Shell{
                     None => Output::stdout(&format!("complete: {}: no completion specification", cmd))
                 }
             },
-            _ => Output::stderr("Usage: complete <'-p' or '-C'> <command>")
+
+            [Token::Arg(flag), Token::Arg(cmd), ..] if flag == "-r" => {
+                completions_paths.remove(cmd);
+                Output::empty()
+            },
+            _ => Output::stderr("Usage: complete <'-p'/'-C'/'-r'> <command>")
         }
     }
 
