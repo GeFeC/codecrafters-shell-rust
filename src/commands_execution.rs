@@ -44,24 +44,23 @@ impl Shell{
     }
 
     fn execute_jobs(&self) -> Output{
-        let mut output = self.jobs.iter()
+        let total_jobs = self.jobs.len();
+
+        let output = self.jobs.iter()
             .enumerate()
-            .map(|(idx, job)| format!("[{}]%  Running{}{}\n", idx + 1, " ".repeat(17), job.command))
-            .collect::<Vec<_>>();
+            .map(|(idx, job)| {
+                let symbol = match idx{
+                    _ if idx + 1 == total_jobs => '+',
+                    _ if idx + 2 == total_jobs => '-',
+                    _ => ' '
+                };
+                format!("[{}]{}  Running{:17}{}\n", idx + 1, symbol, "", job.command)
+            })
+            .collect::<Vec<_>>()
+            .join("");
+            
 
-        if let [.., prev, _] = &mut output[..]{
-            *prev = prev.replace("%", "-");
-        }
-
-        if let [.., current] = &mut output[..]{
-            *current = current.replace("%", "+");
-        }
-        
-        for e in &mut output{
-            *e = e.replace("%", " ");
-        }
-
-        Output::stdout(output.join("").to_string().trim_end())
+        Output::stdout(output.trim_end())
     }
 
     fn execute_echo(&self, args: &CommandArgs) -> Output{
