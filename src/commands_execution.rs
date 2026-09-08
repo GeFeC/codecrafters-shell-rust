@@ -1,9 +1,10 @@
-use crate::command::{Command, CommandArgs, ExecutionStatus, Output, OutputType, stringify_args};
+use crate::command::{Command, CommandArgs, ExecutionStatus, Output, OutputType};
 use crate::command;
 use crate::lexer::{ tokens_to_string, Token };
-use crate::shell::{Shell, Job};
+use crate::shell::{Job, JobState, Shell};
 use crate::program::Program;
 use std::env;
+use std::io::{self, Write};
 use std::path::Path;
 use std::process::Child;
 
@@ -34,44 +35,30 @@ impl Shell{
             command::Kind::Executable{ name, .. } => self.execute_program(&name, cmd_args, output_type),
         };
 
-        let Some(redirection) = command.redirection else{
-            print!("{result}");
-            return ExecutionStatus::Continue;
-        };
+        match command.redirection{
+            Some(redirection) => {
+                result.redirect(redirection);
+            },
+            None => {
+                print!("{result}");
+            }
+        }
 
-        result.redirect(redirection);
+        self.update_jobs();
+        let jobs = self.display_jobs(|(_, job)| matches!(job.state, JobState::Done));
+        if !jobs.is_empty(){
+            println!("{}", jobs);
+        }
+        self.remove_finished_jobs();
 
         ExecutionStatus::Continue
     }
 
     fn execute_jobs(&mut self) -> Output{
-        let total_jobs = self.jobs.len();
-
-        let output = self.jobs.iter_mut()
-            .enumerate()
-            .map(|(idx, job)| {
-                let symbol = match idx{
-                    _ if idx + 1 == total_jobs => '+',
-                    _ if idx + 2 == total_jobs => '-',
-                    _ => ' '
-                };
-
-                let (state_name, has_finished) = match job.process.try_wait(){
-                    Ok(Some(_)) => ("Done", true),
-                    Ok(None) => ("Running", false),
-                    Err(_err) => todo!()
-                };
-
-                job.finished = has_finished;
-
-                format!("[{}]{}  {:24}{}\n", job.idx, symbol, state_name, job.command)
-            })
-            .collect::<Vec<_>>()
-            .join("");
-
-        self.jobs.retain(|j| !j.finished);
-
-        Output::stdout(output.trim_end())
+        self.update_jobs();
+        let output = Output::stdout(&self.display_jobs(|_| true));
+        self.remove_finished_jobs();
+        output
     }
 
     fn execute_echo(&self, args: &CommandArgs) -> Output{
@@ -144,7 +131,7 @@ impl Shell{
     }
 
     fn start_job(&mut self, executable: &str, args: &CommandArgs, proc: Child) -> Output{
-        let command = format!("{} {}", executable, stringify_args(args));
+        let command = format!("{} {}", executable, tokens_to_string(args));
 
         let pid = proc.id();
         let job = Job::new(proc, command);
