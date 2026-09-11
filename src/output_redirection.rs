@@ -59,7 +59,7 @@ pub fn get_redirection_and_new_command_args(command_args: Vec<lexer::Token>) -> 
 }
 
 impl Output{
-    pub fn redirect(&self, redirection: Redirection){
+    pub fn redirect(&self, redirection: &Redirection){
         if !matches!(redirection.target, RedirectionTarget::Stdout(_)) && !self.stdout.is_empty(){
             println!("{}", self.stdout);
         }
@@ -68,7 +68,7 @@ impl Output{
             println!("{}", self.stderr);
         }
 
-        let (out, file) = match redirection.target{
+        let (out, file) = match &redirection.target{
             RedirectionTarget::Stdout(file) => (&self.stdout, file),
             RedirectionTarget::Stderr(file) => (&self.stderr, file),
         };

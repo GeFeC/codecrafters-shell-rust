@@ -87,8 +87,10 @@ pub enum Kind{
 
 impl Command{
     pub fn from_str(command: &str) -> Result<Command, String>{
-        let command = lexer::split_command(command)?;
+        Self::from_tokens(&lexer::split_command(command)?)
+    }
 
+    pub fn from_tokens(command: &[lexer::Token]) -> Result<Command, String>{
         let Some(lexer::Token::Arg(command_name)) = command.first() else {
             return Err(String::from("Invalid command name"));
         };

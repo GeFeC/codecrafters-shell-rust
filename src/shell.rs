@@ -1,6 +1,6 @@
 use std::process::{Child};
 
-use crate::{completer};
+use crate::{completer, lexer};
 use crate::command::{Command};
 use rustyline::{ CompletionType, Config, history::DefaultHistory };
 use rustyline::error::{ReadlineError};

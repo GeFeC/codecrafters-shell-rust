@@ -5,7 +5,7 @@ use std::process;
 use std::process::Child;
 
 pub struct Program{
-    command: process::Command
+    pub command: process::Command
 }
 
 impl Program{

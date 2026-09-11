@@ -5,14 +5,10 @@ use crate::shell::{JobState, Shell};
 use crate::program::Program;
 use std::env;
 use std::path::Path;
-use std::process::Child;
+use std::process::{Child, Stdio};
 
 impl Shell{
-    pub fn execute_command(&mut self, command: Command) -> ExecutionStatus{
-        if let command::Kind::Exit = command.r#type{
-            return ExecutionStatus::Exit;
-        } 
-
+    pub fn command_output(&mut self, command: &Command) -> Output{
         let (output_type, cmd_args) = match &command.args[..]{
             [rest @ .., Token::Arg(val)] if val == "&" => {
                 (OutputType::Both, rest)
@@ -23,20 +19,28 @@ impl Shell{
             }, &command.args[..])
         };
 
-        let result = match command.r#type{
-            command::Kind::Exit => unreachable!(),
+        match &command.r#type{
+            command::Kind::Exit => Output::empty(),
             command::Kind::Echo => self.execute_echo(cmd_args),
             command::Kind::Type => self.execute_type(cmd_args),
             command::Kind::Pwd => self.execute_pwd(),
             command::Kind::Cd => self.execute_cd(cmd_args),
             command::Kind::Complete => self.execute_complete(cmd_args),
             command::Kind::Jobs => self.execute_jobs(),
-            command::Kind::Executable{ name, .. } => self.execute_program(&name, cmd_args, output_type),
-        };
+            command::Kind::Executable{ name, .. } => self.execute_program(&[&[Token::Arg(name.clone())], cmd_args].concat(), output_type),
+        }
+    }
+
+    pub fn execute_command(&mut self, command: Command) -> ExecutionStatus{
+        if let command::Kind::Exit = command.r#type{
+            return ExecutionStatus::Exit;
+        } 
+
+        let result = self.command_output(&command);
 
         match command.redirection{
             Some(redirection) => {
-                result.redirect(redirection);
+                result.redirect(&redirection);
             },
             None => {
                 print!("{result}");
@@ -140,23 +144,56 @@ impl Shell{
         Output::stdout(&format!("[{}] {}", job_idx, pid))
     }
 
-    pub fn execute_program(&mut self, executable: &str, args: &CommandArgs, output_type: OutputType) -> Output{
-        let mut program = Program::new(executable)
-            .args(args);
-        
+    pub fn execute_program(&mut self, args: &CommandArgs, output_type: OutputType) -> Output{
+        let processes = args.split(|t| matches!(t, Token::Pipe)).map(|proc| {
+            let [Token::Arg(cmd_name), args @ ..] = proc else {
+                return None;
+            };
+
+            Some(Program::new(cmd_name).args(args))
+        }).collect::<Option<Vec<_>>>();
+
+        let Some(mut processes) = processes else{
+            return Output::stderr("Invalid command name");
+        };
+
+        for i in 0..(processes.len() - 1){
+            let (proc, next_proc) = processes.split_at_mut(i + 1);
+            let proc = &mut proc[i];
+            let next_proc = &mut next_proc[0];
+
+            proc.command.stdout(Stdio::piped());
+            match &mut proc.spawn(){
+                Ok(proc) => {
+                    next_proc.command.stdin(proc.stdout.take().unwrap())
+                },
+                Err(err) => {
+                    return Output::stderr(&format!("{err}"));
+                }
+            };
+        }
+
+        let last_proc = processes.last_mut().unwrap();
+
         match output_type{
             OutputType::Both => {
-                match program.spawn(){
-                    Ok(child) => self.start_job(executable, args, child),
+                match last_proc.spawn(){
+                    Ok(child) => {
+                        let [Token::Arg(executable), ..] = args else{
+                            unreachable!();
+                        };
+
+                        self.start_job(executable, args, child)
+                    },
                     Err(err) => {
                         eprintln!("{err}");
                         Output::empty()
                     }
                 }
             }
-            OutputType::Redirect => program.output(),
+            OutputType::Redirect => last_proc.output(),
             OutputType::Display => {
-                program.spawn_and_wait();
+                last_proc.spawn_and_wait();
                 Output::empty()
             }
         }

@@ -6,12 +6,13 @@ pub enum Token{
     Stdout,
     Stderr,
     StdoutAppend,
-    StderrAppend
+    StderrAppend,
+    Pipe
 }
 
 impl Token{
     pub fn is_redirection(&self) -> bool{
-        !matches!(self, Self::Arg(_))
+        matches!(self, Token::Stdout | Token::Stderr | Token::StdoutAppend | Token::StderrAppend)
     }
 }
 
@@ -19,13 +20,11 @@ impl std::fmt::Display for Token{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result{
         write!(f, "{}", match self{
             Self::Arg(arg) => arg.clone(),
-            token => String::from(match token{
-                Self::Stdout => ">",
-                Self::Stderr => "2>",
-                Self::StdoutAppend => "",
-                Self::StderrAppend => "2>>",
-                Self::Arg(_) => unreachable!()
-            })
+            Self::Stdout => String::from(">"),
+            Self::Stderr => String::from("2>"),
+            Self::StdoutAppend => String::from(">>"),
+            Self::StderrAppend => String::from("2>>"),
+            Self::Pipe => String::from("|")
         })
     }
 }
@@ -47,11 +46,11 @@ pub fn split_command(args: &str) -> Result<Vec<Token>, String>{
         match c{
             _ if TERMINATORS.contains(&c) => {
                 /*
-                 * When the redirection operator is lexed, arg can contains invalid data such as
+                 * When terminator is lexed, arg can contain invalid data such as
                  * an empty string, or a part of the redirection operator. We don't want that to be
                  * pushed to the token array
                  * */
-                let arg_contains_valid_data = !(c == '>' && ["1", "2", ""].contains(&arg.as_str()));
+                let arg_contains_valid_data = !(c == '>' && ["1", "2"].contains(&arg.as_str())) && !arg.is_empty();
 
                 if arg_contains_valid_data{
                     result.push(Token::Arg(arg.clone()));
@@ -60,6 +59,9 @@ pub fn split_command(args: &str) -> Result<Vec<Token>, String>{
 
                 match c{
                     ' ' => { },
+                    '|' => {
+                        result.push(Token::Pipe);
+                    }
                     '>' => {
                         let (token, new_iter) = lexe_redirection(args, iter)?;
                         iter = new_iter;
@@ -193,7 +195,7 @@ fn lexe_redirection<I: LexerIterator>(args: &str, mut iter: I) -> Result<(Token,
     }, iter))
 }
 
-const TERMINATORS: &[char] = &[' ', '>', '\0'];
+const TERMINATORS: &[char] = &[' ', '>', '\0', '|'];
 const QUOTES: &[char] = &['\'', '"'];
 
 pub fn tokens_to_string(args: &[Token]) -> String{
@@ -317,6 +319,14 @@ mod tests{
             (r#""hello"2>>world"#, vec![arg("hello2"), Token::StdoutAppend, arg("world")]),
             (r#"hello 2>> world"#, vec![arg("hello"), Token::StderrAppend, arg("world")]),
             (r#""hello 2>> world""#, vec![arg("hello 2>> world")]),
+        ]);
+    }
+
+    #[test]
+    fn test_pipe(){
+        test(&[
+            (r#"hello | world"#, vec![arg("hello"), Token::Pipe, arg("world")]),
+            (r#"echo "hello | pipes" | wc"#, vec![arg("echo"), arg("hello | pipes"), Token::Pipe, arg("wc")]),
         ]);
     }
 }
