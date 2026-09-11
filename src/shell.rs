@@ -1,6 +1,4 @@
-use std::process::{Child};
-
-use crate::jobs::{Job, JobState};
+use crate::jobs::{Job};
 use crate::{completer};
 use crate::command::{Command};
 use rustyline::{ CompletionType, Config, history::DefaultHistory };

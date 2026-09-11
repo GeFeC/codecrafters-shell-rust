@@ -1,5 +1,6 @@
 use crate::env;
 use crate::lexer;
+use crate::lexer::Token;
 use crate::output_redirection;
 use std::str::FromStr;
 use strum_macros::EnumString;
@@ -9,10 +10,16 @@ use crate::output_redirection::{Redirection};
 pub type CommandArgs = [lexer::Token];
 pub type CommandArgsStorage = Vec<lexer::Token>;
 
+pub enum ExecutionPolicy{
+    Foreground,
+    Background
+}
+
 pub struct Command{
     pub r#type: Kind,
     pub args: CommandArgsStorage,
-    pub redirection: Option<Redirection>
+    pub redirection: Option<Redirection>,
+    pub execution_policy: ExecutionPolicy 
 }
 
 pub struct Output{
@@ -62,7 +69,7 @@ impl std::fmt::Display for Output{
 pub enum OutputType{
     Display,
     Redirect,
-    Both
+    Background //For ExecutionPolicy::Background
 }
 
 #[derive(PartialEq, EnumString, VariantNames)]
@@ -95,7 +102,15 @@ impl Command{
             return Err(String::from("Invalid command name"));
         };
 
-        let command_args = &command[1..];
+        let mut command_args = &command[1..];
+
+        let mut execution_policy = ExecutionPolicy::Foreground; 
+        if let [actual_command_args @ .., Token::Arg(last)] = command_args && last == "&"{
+            command_args = actual_command_args; 
+            execution_policy = ExecutionPolicy::Background;
+        }
+
+        let execution_policy = execution_policy;
 
         let (redirection, command_args) = output_redirection::get_redirection_and_new_command_args(
             command_args.to_vec()
@@ -113,7 +128,8 @@ impl Command{
         Ok(Command{
             r#type: command_type?,
             args: command_args,
-            redirection
+            redirection,
+            execution_policy
         })
     }
 }

@@ -1,4 +1,4 @@
-use crate::command::{Command, CommandArgs, ExecutionStatus, Output, OutputType};
+use crate::command::{Command, CommandArgs, ExecutionPolicy, ExecutionStatus, Output, OutputType};
 use crate::command;
 use crate::lexer::{ tokens_to_string, Token };
 use crate::shell::{Shell};
@@ -10,16 +10,15 @@ use std::process::{Child, Stdio};
 
 impl Shell{
     pub fn command_output(&mut self, command: &Command) -> Output{
-        let (output_type, cmd_args) = match &command.args[..]{
-            [rest @ .., Token::Arg(val)] if val == "&" => {
-                (OutputType::Both, rest)
-            },
-            _ => (match command.redirection{
+        let output_type = match command.execution_policy{
+            ExecutionPolicy::Background => OutputType::Background,
+            ExecutionPolicy::Foreground => match command.redirection{
                 None => OutputType::Display,
                 Some(_) => OutputType::Redirect,
-            }, &command.args[..])
+            }
         };
 
+        let cmd_args = &command.args[..];
         match &command.r#type{
             command::Kind::Exit => Output::empty(),
             command::Kind::Echo => self.execute_echo(cmd_args),
@@ -177,7 +176,7 @@ impl Shell{
         let last_proc = processes.last_mut().unwrap();
 
         match output_type{
-            OutputType::Both => {
+            OutputType::Background => {
                 match last_proc.spawn(){
                     Ok(child) => {
                         self.start_job(args, child)
