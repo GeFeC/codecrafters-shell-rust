@@ -73,7 +73,7 @@ pub enum OutputType{
 }
 
 #[derive(PartialEq, EnumString, VariantNames)]
-pub enum Kind{
+pub enum BuiltinCommand{
     #[strum(to_string = "exit")]
     Exit,
     #[strum(to_string = "pwd")]
@@ -88,7 +88,10 @@ pub enum Kind{
     Complete,
     #[strum(to_string = "jobs")]
     Jobs,
-    #[strum(to_string = "")]
+}
+
+pub enum Kind{
+    Builtin(BuiltinCommand),
     Executable{ name: String, path: String },
 }
 
@@ -116,17 +119,19 @@ impl Command{
             command_args.to_vec()
         );
         
-        let command_type = match Kind::from_str(command_name){
-            Ok(command) => Ok(command),
-            Err(_) if let Some(path) = env::find_in_path(command_name) => Ok(Kind::Executable{
+        let command_type = match BuiltinCommand::from_str(command_name){
+            Ok(command) => Kind::Builtin(command),
+            Err(_) if let Some(path) = env::find_in_path(command_name) => Kind::Executable{
                 name: command_name.to_owned(),
                 path
-            }),
-            Err(_) => Err(format!("{}: command not found", command_name))
+            },
+            Err(_) => {
+                return Err(format!("{}: command not found", command_name))
+            }
         };
 
         Ok(Command{
-            r#type: command_type?,
+            r#type: command_type,
             args: command_args,
             redirection,
             execution_policy

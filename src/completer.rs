@@ -27,7 +27,7 @@ impl Completer{
         let executables = executables.iter().map(|s| s.as_str()).collect::<Vec<_>>();
 
         let commands = [
-            command::Kind::VARIANTS,
+            command::BuiltinCommand::VARIANTS,
             &executables
         ].concat();
 

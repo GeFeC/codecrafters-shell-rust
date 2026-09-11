@@ -7,6 +7,7 @@ use crate::program::Program;
 use std::env;
 use std::path::Path;
 use std::process::{Child, Stdio};
+use command::BuiltinCommand;
 
 impl Shell{
     pub fn command_output(&mut self, command: &Command) -> Output{
@@ -20,19 +21,21 @@ impl Shell{
 
         let cmd_args = &command.args[..];
         match &command.r#type{
-            command::Kind::Exit => Output::empty(),
-            command::Kind::Echo => self.execute_echo(cmd_args),
-            command::Kind::Type => self.execute_type(cmd_args),
-            command::Kind::Pwd => self.execute_pwd(),
-            command::Kind::Cd => self.execute_cd(cmd_args),
-            command::Kind::Complete => self.execute_complete(cmd_args),
-            command::Kind::Jobs => self.execute_jobs(),
+            command::Kind::Builtin(command) => match command{
+                BuiltinCommand::Exit => Output::empty(),
+                BuiltinCommand::Echo => self.execute_echo(cmd_args),
+                BuiltinCommand::Type => self.execute_type(cmd_args),
+                BuiltinCommand::Pwd => self.execute_pwd(),
+                BuiltinCommand::Cd => self.execute_cd(cmd_args),
+                BuiltinCommand::Complete => self.execute_complete(cmd_args),
+                BuiltinCommand::Jobs => self.execute_jobs(),
+            }
             command::Kind::Executable{ name, .. } => self.execute_program(&[&[Token::Arg(name.clone())], cmd_args].concat(), output_type),
         }
     }
 
     pub fn execute_command(&mut self, command: Command) -> ExecutionStatus{
-        if let command::Kind::Exit = command.r#type{
+        if let command::Kind::Builtin(BuiltinCommand::Exit) = command.r#type{
             return ExecutionStatus::Exit;
         } 
 
