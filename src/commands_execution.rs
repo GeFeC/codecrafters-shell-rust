@@ -1,7 +1,8 @@
 use crate::command::{Command, CommandArgs, ExecutionStatus, Output, OutputType};
 use crate::command;
 use crate::lexer::{ tokens_to_string, Token };
-use crate::shell::{JobState, Shell};
+use crate::shell::{Shell};
+use crate::jobs::JobState;
 use crate::program::Program;
 use std::env;
 use std::path::Path;
@@ -133,8 +134,8 @@ impl Shell{
         }
     }
 
-    fn start_job(&mut self, executable: &str, args: &CommandArgs, proc: Child) -> Output{
-        let command = format!("{} {}", executable, tokens_to_string(args));
+    fn start_job(&mut self, command: &CommandArgs, proc: Child) -> Output{
+        let command = format!("{}", tokens_to_string(command));
 
         let pid = proc.id();
         let job = self.new_job(proc, command);
@@ -179,11 +180,7 @@ impl Shell{
             OutputType::Both => {
                 match last_proc.spawn(){
                     Ok(child) => {
-                        let [Token::Arg(executable), ..] = args else{
-                            unreachable!();
-                        };
-
-                        self.start_job(executable, args, child)
+                        self.start_job(args, child)
                     },
                     Err(err) => {
                         eprintln!("{err}");

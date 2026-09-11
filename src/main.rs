@@ -8,6 +8,7 @@ mod shell;
 mod output_redirection;
 mod program;
 mod command_pipeline;
+mod jobs;
 
 use shell::Shell;
 
