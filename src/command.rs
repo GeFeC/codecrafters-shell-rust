@@ -133,7 +133,6 @@ impl Command{
             Err(format!("{}: command not found", command_name))
         };
         
-        let subcommands = command.split(|t| matches!(t, Token::Pipe)).collect::<Vec<_>>();
         Ok(Command{
             r#type: command_type?,
             redirection,
@@ -271,17 +270,6 @@ impl Shell{
             },
             _ => Output::stderr("Usage: complete <'-p'/'-C'/'-r'> <command>")
         }
-    }
-
-    fn start_job(&mut self, command: &CommandLine, proc: Child) -> Output{
-        let command = command.to_string();
-
-        let pid = proc.id();
-        let job = self.new_job(proc, command);
-        let job_idx = job.idx;
-        self.jobs.push(job);
-
-        Output::stdout(&format!("[{}] {}", job_idx, pid))
     }
 
     pub fn execute_program(&mut self, program_name: &str, args: &CommandLine, output_type: OutputType) -> Output{

@@ -2,7 +2,9 @@ use std::process::{Child};
 use strum_macros::EnumString;
 use strum_macros::Display;
 
+use crate::command::Output;
 use crate::shell::Shell;
+use crate::lexer::CommandLine;
 
 #[derive(EnumString, Display)]
 pub enum JobState{
@@ -72,5 +74,16 @@ impl Shell{
             .join("");
 
         output.trim_end().to_string()
+    }
+
+    pub fn start_job(&mut self, command: &CommandLine, proc: Child) -> Output{
+        let command = command.to_string();
+
+        let pid = proc.id();
+        let job = self.new_job(proc, command);
+        let job_idx = job.idx;
+        self.jobs.push(job);
+
+        Output::stdout(&format!("[{}] {}", job_idx, pid))
     }
 }

@@ -46,7 +46,7 @@ impl Shell{
                         continue;
                     }
 
-                    match CommandPipeline::from_str(input){
+                    match CommandPipeline::new(input){
                         Ok(command) => {
                             if self.execute_cmd_pipeline(command).should_exit(){
                                 return;

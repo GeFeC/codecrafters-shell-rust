@@ -1,8 +1,10 @@
+use std::fs::OpenOptions;
 use std::process::Stdio;
 use std::string;
 use std::thread::current;
 
 use crate::command::{ExecutionStatus, Output};
+use crate::output_redirection::{Redirection, RedirectionTarget, RedirectionType};
 
 use std::io::Write;
 use crate::lexer::{CommandLine, Token};
@@ -12,17 +14,18 @@ use crate::program::Program;
 use crate::shell::Shell;
 
 pub struct CommandPipeline{
+    raw: CommandLine,
     pub first_command: Option<Command>,
     pub processes: Vec<Program>,
-    pub execution_policy: ExecutionPolicy
+    pub execution_policy: ExecutionPolicy,
+    pub redirection: Option<Redirection>
 }
 
 impl CommandPipeline{
-    pub fn from_str(commands: &str) -> Result<CommandPipeline, String>{
-        Self::new(&CommandLine::from(commands)?)
-    }
+    pub fn new(commands: &str) -> Result<CommandPipeline, String>{
+        let commands = CommandLine::from(commands)?;
+        let raw = CommandLine(commands.clone());
 
-    pub fn new(commands: &CommandLine) -> Result<CommandPipeline, String>{
         let mut commands = &commands[..];
         let mut execution_policy = ExecutionPolicy::Foreground; 
         if let [actual_commands @ .., Token::Arg(last)] = commands && last == "&"{
@@ -56,10 +59,18 @@ impl CommandPipeline{
             Program::new(name).args(args)
         }).collect::<Vec<_>>();
 
+        let redirection = if !commands.is_empty() {
+            commands.pop().unwrap().redirection.clone()
+        } else {
+            first_command.as_ref().unwrap().redirection.clone()
+        };
+
         Ok(CommandPipeline{
+            raw,
             first_command,
             processes,
-            execution_policy
+            execution_policy,
+            redirection
         })
     }
 }
@@ -72,6 +83,24 @@ impl Shell{
             pipeline.first_command.as_mut().unwrap().execution_policy = pipeline.execution_policy;
             return Ok(self.execute_command(pipeline.first_command.unwrap()));
         };
+
+        if let Some(redirection) = pipeline.redirection{
+            let should_append = matches!(redirection.r#type, RedirectionType::Append);
+
+            let filename = redirection.target.filepath();
+            let file = OpenOptions::new()
+                .write(true)
+                .append(should_append)
+                .truncate(!should_append)
+                .create(true)
+                .open(filename)
+                .map_err(|err| format!("{err}"))?;
+
+            match redirection.target{
+                RedirectionTarget::Stdout(_) => last.command.stdout(file),
+                RedirectionTarget::Stderr(_) => last.command.stderr(file)
+            };
+        }
 
         for proc in &mut *all_but_last{
             proc.command.stdout(Stdio::piped());
@@ -94,7 +123,7 @@ impl Shell{
         if let Some(command) = pipeline.first_command{
             let first_stdin = self.command_output(&command).stdout;
 
-            let stdin = current_child.stdin.as_mut().ok_or(String::from("stdin error"))?;
+            let mut stdin = current_child.stdin.take().ok_or(String::from("stdin error"))?;
             writeln!(stdin, "{}", first_stdin).map_err(|err| format!("{err}"))?;
         }
 
@@ -105,9 +134,15 @@ impl Shell{
             current_child = proc.spawn().map_err(|err| format!("{err}"))?;
         }
 
-        //let first_output = self.command_output(&pipeline.first_command);
-
-        current_child.wait().map_err(|err| format!("{err}"))?;
+        match pipeline.execution_policy{
+            ExecutionPolicy::Foreground => {
+                current_child.wait().map_err(|err| format!("{err}"))?;
+            },
+            ExecutionPolicy::Background => {
+                let out = self.start_job(&pipeline.raw, current_child);
+                print!("{out}");
+            }
+        }
 
         Ok(ExecutionStatus::Continue)
     }
@@ -127,22 +162,16 @@ impl Shell{
 mod tests{
     use super::*;
 
-    fn get_pipeline(str: &str) -> CommandPipeline{
-        let cmd = CommandLine::from(str).unwrap();
-
-        CommandPipeline::new(&cmd).unwrap()
-    }
-
     #[test]
     fn test_first_command_existence(){
-        let pipeline = get_pipeline("ls | wc");
+        let pipeline = CommandPipeline::new("ls | wc").unwrap();
 
         assert!(pipeline.first_command.is_none());
     }
 
     #[test]
     fn test_proc_count(){
-        let pipeline = get_pipeline("ls | wc");
+        let pipeline = CommandPipeline::new("ls | wc").unwrap();
 
         assert!(pipeline.processes.len() == 2);
     }

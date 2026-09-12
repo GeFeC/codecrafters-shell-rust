@@ -3,16 +3,28 @@ use crate::lexer;
 use std::fs::{ OpenOptions };
 use std::io::Write;
 
+#[derive(Clone)]
 pub struct Redirection{
     pub target: RedirectionTarget,
     pub r#type: RedirectionType
 }
 
+#[derive(Clone)]
 pub enum RedirectionTarget{
     Stdout(String),
     Stderr(String)
 }
 
+impl RedirectionTarget{
+    pub fn filepath(&self) -> &str{
+        match self{
+            Self::Stdout(file) => file,
+            Self::Stderr(file) => file
+        }
+    }
+}
+
+#[derive(Clone)]
 pub enum RedirectionType{
     Overwrite,
     Append
