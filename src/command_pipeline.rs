@@ -24,7 +24,6 @@ pub struct CommandPipeline{
 impl CommandPipeline{
     pub fn new(commands: &str) -> Result<CommandPipeline, String>{
         let commands = CommandLine::from(commands)?;
-        let raw = CommandLine(commands.clone());
 
         let mut commands = &commands[..];
         let mut execution_policy = ExecutionPolicy::Foreground; 
@@ -32,6 +31,7 @@ impl CommandPipeline{
             commands = actual_commands;
             execution_policy = ExecutionPolicy::Background;
         }
+        let raw = CommandLine(commands.to_vec());
 
         let mut commands = commands
             .split(|t| matches!(t, Token::Pipe))
