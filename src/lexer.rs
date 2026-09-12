@@ -1,4 +1,82 @@
 use core::fmt;
+use std::ops::Deref;
+
+#[derive(Debug)]
+pub struct CommandLine(pub Vec<Token>);
+
+impl Deref for CommandLine{
+    type Target = Vec<Token>;
+
+    fn deref(&self) -> &Self::Target{
+        &self.0
+    }
+}
+
+impl CommandLine{
+    pub fn from(args: &str) -> Result<CommandLine, String>{
+        let mut result = Vec::<Token>::new();
+
+        let mut arg = String::with_capacity(args.len());
+        let in_single_quotes = false;
+        let in_double_quotes = false;
+
+        let args = args.trim();
+        let mut iter = args.char_indices().chain(std::iter::once((0, '\0')));
+
+        while let Some((_, c)) = iter.next(){
+            match c{
+                _ if TERMINATORS.contains(&c) => {
+                    /*
+                     * When terminator is lexed, arg can contain invalid data such as
+                     * an empty string, or a part of the redirection operator. We don't want that to be
+                     * pushed to the token array
+                     * */
+                    let arg_contains_valid_data = !(c == '>' && ["1", "2"].contains(&arg.as_str())) && !arg.is_empty();
+
+                    if arg_contains_valid_data{
+                        result.push(Token::Arg(arg.clone()));
+                    }
+                    arg.clear();
+
+                    match c{
+                        ' ' => { },
+                        '|' => {
+                            result.push(Token::Pipe);
+                        }
+                        '>' => {
+                            let (token, new_iter) = lexe_redirection(args, iter)?;
+                            iter = new_iter;
+                            result.push(token);
+                        }
+                        '\0' => {}
+                        _ => unreachable!()
+                    };
+                    iter = skip_spaces(iter);
+                }
+                c => {
+                    let (new_arg, new_iter) = match c{
+                        '"' | '\'' => lexe_arg_inside_quoutes(iter, c)?,
+                        _ => lexe_arg_outside_quotes(c, iter)?
+                    };
+                    iter = new_iter;
+                    arg.push_str(&new_arg);
+                }
+            }
+        }
+
+        if in_single_quotes || in_double_quotes{
+            return Err("Missing closing quote".to_owned());
+        }
+
+        Ok(CommandLine(result))
+    }
+}
+
+impl std::string::ToString for CommandLine{
+    fn to_string(&self) -> String{
+        self.0.iter().map(|t| t.to_string()).collect::<Vec<_>>().join(" ")
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token{
@@ -16,6 +94,7 @@ impl Token{
     }
 }
 
+
 impl std::fmt::Display for Token{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result{
         write!(f, "{}", match self{
@@ -31,64 +110,6 @@ impl std::fmt::Display for Token{
 
 pub trait LexerIterator: Iterator<Item = (usize, char)> + Clone {}
 impl<T> LexerIterator for T where T: Iterator<Item = (usize, char)> + Clone {}
-
-pub fn split_command(args: &str) -> Result<Vec<Token>, String>{
-    let mut result = Vec::<Token>::new();
-
-    let mut arg = String::with_capacity(args.len());
-    let in_single_quotes = false;
-    let in_double_quotes = false;
-
-    let args = args.trim();
-    let mut iter = args.char_indices().chain(std::iter::once((0, '\0')));
-
-    while let Some((_, c)) = iter.next(){
-        match c{
-            _ if TERMINATORS.contains(&c) => {
-                /*
-                 * When terminator is lexed, arg can contain invalid data such as
-                 * an empty string, or a part of the redirection operator. We don't want that to be
-                 * pushed to the token array
-                 * */
-                let arg_contains_valid_data = !(c == '>' && ["1", "2"].contains(&arg.as_str())) && !arg.is_empty();
-
-                if arg_contains_valid_data{
-                    result.push(Token::Arg(arg.clone()));
-                }
-                arg.clear();
-
-                match c{
-                    ' ' => { },
-                    '|' => {
-                        result.push(Token::Pipe);
-                    }
-                    '>' => {
-                        let (token, new_iter) = lexe_redirection(args, iter)?;
-                        iter = new_iter;
-                        result.push(token);
-                    }
-                    '\0' => {}
-                    _ => unreachable!()
-                };
-                iter = skip_spaces(iter);
-            }
-            c => {
-                let (new_arg, new_iter) = match c{
-                    '"' | '\'' => lexe_arg_inside_quoutes(iter, c)?,
-                    _ => lexe_arg_outside_quotes(c, iter)?
-                };
-                iter = new_iter;
-                arg.push_str(&new_arg);
-            }
-        }
-    }
-
-    if in_single_quotes || in_double_quotes{
-        return Err("Missing closing quote".to_owned());
-    }
-
-    Ok(result)
-}
 
 fn lexe_arg_outside_quotes<I: LexerIterator>(first: char, mut iter: I) -> Result<(String, I), String>{
     let mut arg = String::with_capacity(32);
@@ -198,20 +219,16 @@ fn lexe_redirection<I: LexerIterator>(args: &str, mut iter: I) -> Result<(Token,
 const TERMINATORS: &[char] = &[' ', '>', '\0', '|'];
 const QUOTES: &[char] = &['\'', '"'];
 
-pub fn tokens_to_string(args: &[Token]) -> String{
-    args.iter().map(|t| t.to_string()).collect::<Vec<_>>().join(" ")
-}
-
 #[cfg(test)]
 mod tests{
     use super::*;
 
     #[test]
     fn test_missing_closing_quote(){
-        assert!(split_command("\"hello world").is_err());
-        assert!(split_command("\'hello world").is_err());
-        assert!(split_command("\"shell's test\"").is_ok());
-        assert!(split_command("'shell\"s test'").is_ok());
+        assert!(CommandLine::from("\"hello world").is_err());
+        assert!(CommandLine::from("\'hello world").is_err());
+        assert!(CommandLine::from("\"shell's test\"").is_ok());
+        assert!(CommandLine::from("'shell\"s test'").is_ok());
     }
 
     fn arg(str: &str) -> Token{
@@ -220,7 +237,7 @@ mod tests{
 
     fn test(cases: &[(&str, Vec<Token>)]){
         for (idx, (case, expected)) in cases.iter().enumerate(){
-            assert_eq!(split_command(case).unwrap(), *expected, "Case #{} Failed", idx + 1);
+            assert_eq!(CommandLine::from(case).unwrap().0, *expected, "Case #{} Failed", idx + 1);
         }
     }
 
@@ -255,7 +272,7 @@ mod tests{
             (r#"\'hello\'"#, vec![arg(r#"'hello'"#)]),
         ]);
 
-        assert!(split_command("hello\\").is_err());
+        assert!(CommandLine::from("hello\\").is_err());
     }
 
     #[test]
@@ -287,7 +304,7 @@ mod tests{
             (r#""hello > world""#, vec![arg("hello > world")]),
         ]);
 
-        assert!(split_command("hello>").is_err());
+        assert!(CommandLine::from("hello>").is_err());
     }
 
     #[test]

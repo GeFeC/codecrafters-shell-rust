@@ -1,6 +1,6 @@
 use crate::jobs::{Job};
 use crate::{completer};
-use crate::command::{Command};
+use crate::command_pipeline::{CommandPipeline};
 use rustyline::{ CompletionType, Config, history::DefaultHistory };
 use rustyline::error::{ReadlineError};
 
@@ -46,9 +46,9 @@ impl Shell{
                         continue;
                     }
 
-                    match Command::from_str(input){
+                    match CommandPipeline::from_str(input){
                         Ok(command) => {
-                            if self.execute_command(command).should_exit(){
+                            if self.execute_cmd_pipeline(command).should_exit(){
                                 return;
                             }
                         },

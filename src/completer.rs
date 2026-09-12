@@ -8,6 +8,7 @@ use rustyline::{Context, Result, Helper};
 use strum::VariantNames;
 use lexer::Token;
 
+use crate::lexer::CommandLine;
 use crate::program::Program;
 use crate::trie::Trie;
 use crate::{command, lexer};
@@ -62,7 +63,7 @@ impl Completer{
     }
 
     fn complete_using_script(&self, input: &str, pos: usize, script_path: &str) -> CompletionResult{
-        let Ok(command) = lexer::split_command(input) else {
+        let Ok(command) = CommandLine::from(input) else {
             return Ok((pos, vec![]));
         };  
 
@@ -77,7 +78,7 @@ impl Completer{
             _ => vec![Token::Arg(String::new()), Token::Arg(String::new())],
         };
 
-        let args = [vec![command_name.clone()], args].concat();
+        let args = CommandLine([vec![command_name.clone()], args].concat());
         let envs = [
             ("COMP_LINE", input),
             ("COMP_POINT", &format!("{pos}"))

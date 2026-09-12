@@ -1,5 +1,5 @@
-use crate::command::CommandArgs;
 use crate::command::Output;
+use crate::lexer::CommandLine;
 use std::error::Error;
 use std::process;
 use std::process::Child;
@@ -15,7 +15,7 @@ impl Program{
         }
     }
 
-    pub fn args(mut self, args: &CommandArgs) -> Self{
+    pub fn args(mut self, args: &CommandLine) -> Self{
         if !args.is_empty(){
             self.command.args(args.iter().map(|t| t.to_string()));
         }
@@ -30,10 +30,12 @@ impl Program{
         self
     }
 
-    pub fn spawn_and_wait(&mut self){
+    pub fn spawn_and_wait(&mut self) -> Result<(), String>{
         if let Err(err) = self.command.spawn().and_then(|mut c| c.wait()){
-            println!("{err}");
+            return Err(format!("{err}"));
         }
+
+        Ok(())
     }
 
     pub fn spawn(&mut self) -> Result<Child, impl Error>{

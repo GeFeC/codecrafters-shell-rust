@@ -1,4 +1,3 @@
-mod commands_execution;
 mod command;
 mod lexer;
 mod env;
@@ -8,6 +7,7 @@ mod shell;
 mod output_redirection;
 mod program;
 mod jobs;
+mod command_pipeline;
 
 use shell::Shell;
 

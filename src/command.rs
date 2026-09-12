@@ -1,14 +1,16 @@
 use crate::env;
 use crate::lexer;
-use crate::lexer::Token;
+use crate::lexer::{CommandLine, Token};
 use crate::output_redirection;
-use std::str::FromStr;
-use strum_macros::EnumString;
-use strum_macros::VariantNames;
 use crate::output_redirection::{Redirection};
 
-pub type CommandArgs = [lexer::Token];
-pub type CommandArgsStorage = Vec<lexer::Token>;
+use std::str::FromStr;
+use strum_macros::{EnumString, VariantNames};
+use crate::shell::{Shell};
+use crate::jobs::JobState;
+use crate::program::Program;
+use std::path::Path;
+use std::process::{Child};
 
 pub enum ExecutionPolicy{
     Foreground,
@@ -17,9 +19,8 @@ pub enum ExecutionPolicy{
 
 pub struct Command{
     pub r#type: Kind,
-    pub args: CommandArgsStorage,
     pub redirection: Option<Redirection>,
-    pub execution_policy: ExecutionPolicy 
+    pub execution_policy: ExecutionPolicy,
 }
 
 pub struct Output{
@@ -91,22 +92,21 @@ pub enum BuiltinCommand{
 }
 
 pub enum Kind{
-    Builtin(BuiltinCommand),
-    Executable{ name: String, path: String },
+    Builtin{ name: BuiltinCommand, args: CommandLine },
+    Executable{ name: String, full_path: String, args: CommandLine },
 }
 
 impl Command{
     pub fn from_str(command: &str) -> Result<Command, String>{
-        Self::from_tokens(&lexer::split_command(command)?)
+        Self::new(&CommandLine::from(command)?)
     }
 
-    pub fn from_tokens(command: &[lexer::Token]) -> Result<Command, String>{
-        let Some(lexer::Token::Arg(command_name)) = command.first() else {
+    pub fn new(command: &CommandLine) -> Result<Command, String>{
+        let [Token::Arg(command_name), command_args @ ..] = &command[..] else {
             return Err(String::from("Invalid command name"));
         };
 
-        let mut command_args = &command[1..];
-
+        let mut command_args = command_args;
         let mut execution_policy = ExecutionPolicy::Foreground; 
         if let [actual_command_args @ .., Token::Arg(last)] = command_args && last == "&"{
             command_args = actual_command_args; 
@@ -118,24 +118,195 @@ impl Command{
         let (redirection, command_args) = output_redirection::get_redirection_and_new_command_args(
             command_args.to_vec()
         );
-        
-        let command_type = match BuiltinCommand::from_str(command_name){
-            Ok(command) => Kind::Builtin(command),
-            Err(_) if let Some(path) = env::find_in_path(command_name) => Kind::Executable{
-                name: command_name.to_owned(),
-                path
-            },
-            Err(_) => {
-                return Err(format!("{}: command not found", command_name))
-            }
-        };
 
+        let command_type = if let Ok(command) = BuiltinCommand::from_str(command_name){
+            Ok(Kind::Builtin{ name: command, args: CommandLine(command_args) })
+        } 
+        else if let Some(path) = env::find_in_path(command_name){
+            Ok(Kind::Executable {
+                name: command_name.to_owned(),
+                full_path: path,
+                args: CommandLine(command_args)
+            })
+        }
+        else {
+            Err(format!("{}: command not found", command_name))
+        };
+        
+        let subcommands = command.split(|t| matches!(t, Token::Pipe)).collect::<Vec<_>>();
         Ok(Command{
-            r#type: command_type,
-            args: command_args,
+            r#type: command_type?,
             redirection,
             execution_policy
         })
+    }
+}
+
+
+impl Shell{
+    fn execute_command_helper(&mut self, command: &Command, output_type: OutputType) -> Output{
+        match &command.r#type{
+            Kind::Builtin{ name, args } => match name{
+                BuiltinCommand::Exit => Output::empty(),
+                BuiltinCommand::Echo => self.execute_echo(args),
+                BuiltinCommand::Type => self.execute_type(args),
+                BuiltinCommand::Pwd => self.execute_pwd(),
+                BuiltinCommand::Cd => self.execute_cd(args),
+                BuiltinCommand::Complete => self.execute_complete(args),
+                BuiltinCommand::Jobs => self.execute_jobs(),
+            }
+            Kind::Executable{ name, args, .. } => self.execute_program(name, args, output_type),
+        }
+    }
+
+    pub fn command_output(&mut self, command: &Command) -> Output{
+        self.execute_command_helper(command, OutputType::Redirect)
+    }
+
+    pub fn execute_command(&mut self, command: Command) -> ExecutionStatus{
+        if let Kind::Builtin{ name: BuiltinCommand::Exit, .. } = command.r#type{
+            return ExecutionStatus::Exit;
+        } 
+
+        let output_type = match command.execution_policy{
+            ExecutionPolicy::Background => OutputType::Background,
+            ExecutionPolicy::Foreground => match command.redirection{
+                None => OutputType::Display,
+                Some(_) => OutputType::Redirect,
+            }
+        };
+
+        let result = self.execute_command_helper(&command, output_type);
+
+        match command.redirection{
+            Some(redirection) => {
+                result.redirect(&redirection);
+            },
+            None => {
+                print!("{result}");
+            }
+        }
+
+        self.update_jobs();
+        let jobs = self.display_jobs(|(_, job)| matches!(job.state, JobState::Done));
+        if !jobs.is_empty(){
+            println!("{}", jobs);
+        }
+        self.remove_finished_jobs();
+
+        ExecutionStatus::Continue
+    }
+
+    fn execute_jobs(&mut self) -> Output{
+        self.update_jobs();
+        let output = Output::stdout(&self.display_jobs(|_| true));
+        self.remove_finished_jobs();
+        output
+    }
+
+    fn execute_echo(&self, args: &CommandLine) -> Output{
+        Output::stdout(&args.to_string())
+    }
+
+    fn execute_pwd(&self) -> Output{
+        Output::stdout(&format!("{}", std::env::current_dir().unwrap().display()))
+    }
+
+    fn execute_cd(&self, args: &CommandLine) -> Output{
+        let home_dir = std::env::home_dir();
+
+        let path = args.to_string();
+        let path = match path.as_str(){
+            "~" | "" => home_dir.as_deref().and_then(Path::to_str).unwrap_or("~").to_owned(),
+            _ => path
+        };
+
+        if std::env::set_current_dir(&path).is_err(){
+            return Output::stderr(&format!("cd: {}: No such file or directory", path));
+        }
+
+        Output::empty()
+    }
+
+    fn execute_type(&self, checked_cmd: &CommandLine) -> Output{
+        if checked_cmd.len() != 1{
+            return Output::stderr("Usage: type <command name without args>");
+        }
+
+        let cmd_name = checked_cmd.first().unwrap().to_string();
+        let command = Command::from_str(&cmd_name);
+
+        if command.is_err(){
+            return Output::stderr(&format!("{}: not found", cmd_name));
+        }
+
+        let command = command.unwrap();
+
+        if let Kind::Executable { full_path, .. } = command.r#type{
+            return Output::stdout(&format!("{} is {}", cmd_name, full_path));
+        }
+
+        Output::stdout(&format!("{} is a shell builtin", cmd_name))
+    }
+
+    fn execute_complete(&mut self, args: &CommandLine) -> Output{
+        let completions_paths = &mut self.editor.helper_mut().unwrap().completions_paths;
+
+        match &args[..]{
+            [Token::Arg(flag), Token::Arg(path), Token::Arg(cmd), ..] if flag == "-C" => {
+                completions_paths.insert(cmd.clone(), path.clone());
+                Output::empty()
+            },
+
+            [Token::Arg(flag), Token::Arg(cmd), ..] if flag == "-p" => {
+                match completions_paths.get(cmd){
+                    Some(path) => Output::stdout(&format!("complete -C '{path}' {cmd}")),
+                    None => Output::stdout(&format!("complete: {}: no completion specification", cmd))
+                }
+            },
+
+            [Token::Arg(flag), Token::Arg(cmd), ..] if flag == "-r" => {
+                completions_paths.remove(cmd);
+                Output::empty()
+            },
+            _ => Output::stderr("Usage: complete <'-p'/'-C'/'-r'> <command>")
+        }
+    }
+
+    fn start_job(&mut self, command: &CommandLine, proc: Child) -> Output{
+        let command = command.to_string();
+
+        let pid = proc.id();
+        let job = self.new_job(proc, command);
+        let job_idx = job.idx;
+        self.jobs.push(job);
+
+        Output::stdout(&format!("[{}] {}", job_idx, pid))
+    }
+
+    pub fn execute_program(&mut self, program_name: &str, args: &CommandLine, output_type: OutputType) -> Output{
+        let mut program = Program::new(program_name).args(args);
+
+        match output_type{
+            OutputType::Background => {
+                match program.spawn(){
+                    Ok(child) => {
+                        self.start_job(args, child)
+                    },
+                    Err(err) => {
+                        eprintln!("{err}");
+                        Output::empty()
+                    }
+                }
+            }
+            OutputType::Redirect => program.output(),
+            OutputType::Display => {
+                if let Err(err) = program.spawn_and_wait(){
+                    return Output::stderr(&err);
+                }
+                Output::empty()
+            }
+        }
     }
 }
 
@@ -153,11 +324,12 @@ impl ExecutionStatus{
     }
 }
 
+
 #[cfg(test)]
 mod tests{
     use crate::shell::Shell;
 
-use super::*;
+    use super::*;
     use tempfile::tempdir;
     use std::fs;
 
@@ -193,5 +365,19 @@ use super::*;
         let content = fs::read_to_string(&file_path).unwrap();
 
         assert_eq!(content, "");
+    }
+
+    fn test_type_helper(cmd: &str) -> Output{
+        let shell = Shell::new().unwrap();
+        shell.execute_type(&CommandLine(vec![Token::Arg(cmd.to_owned())]))
+    }
+
+    #[test]
+    fn test_type(){
+        let output = test_type_helper("cat");
+        assert_ne!(output.stdout, "cat is a shell builtin");
+
+        let output = test_type_helper("echo");
+        assert_eq!(output.stdout, "echo is a shell builtin");
     }
 }
