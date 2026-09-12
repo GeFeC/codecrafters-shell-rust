@@ -4,6 +4,7 @@ use crate::output_redirection;
 use crate::output_redirection::{Redirection};
 
 use std::str::FromStr;
+use rustyline::history::History;
 use strum_macros::{EnumString, VariantNames};
 use crate::shell::{Shell};
 use crate::jobs::JobState;
@@ -153,7 +154,7 @@ impl Shell{
                 BuiltinCommand::Cd => self.execute_cd(args),
                 BuiltinCommand::Complete => self.execute_complete(args),
                 BuiltinCommand::Jobs => self.execute_jobs(),
-                BuiltinCommand::History => self.execute_history()
+                BuiltinCommand::History => self.execute_history(args)
             }
             Kind::Executable{ name, args, .. } => self.execute_program(name, args, output_type),
         }
@@ -204,9 +205,27 @@ impl Shell{
         output
     }
 
-    fn execute_history(&self) -> Output{
-        let output = self.editor.history().iter().enumerate().map(|(idx, entry)| format!("    {}  {entry}", idx + 1)).collect::<Vec<_>>().join("\n");
-        Output::stdout(&output)
+    fn execute_history(&self, args: &CommandLine) -> Output{
+        let limited = args.len() > 0;
+        let last_n = match &args[..]{
+            [] => 0,
+            [Token::Arg(n)] => match n.parse::<usize>(){
+                Ok(n) => n,
+                Err(_) => return Output::stderr(&format!("history: {n}: numeric argument required"))
+            },
+            _ => return Output::stderr("history: too many arguments")
+        };
+
+        let history_size = self.editor.history().len();
+        let output = self.editor.history()
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !limited || idx + last_n >= history_size)
+            .map(|(idx, entry)| format!("    {}  {entry}", idx + 1))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        return Output::stdout(&output);
     }
 
     fn execute_echo(&self, args: &CommandLine) -> Output{
