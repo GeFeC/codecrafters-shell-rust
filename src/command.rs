@@ -153,7 +153,7 @@ impl Shell{
                 BuiltinCommand::Cd => self.execute_cd(args),
                 BuiltinCommand::Complete => self.execute_complete(args),
                 BuiltinCommand::Jobs => self.execute_jobs(),
-                BuiltinCommand::History => todo!()
+                BuiltinCommand::History => self.execute_history()
             }
             Kind::Executable{ name, args, .. } => self.execute_program(name, args, output_type),
         }
@@ -202,6 +202,11 @@ impl Shell{
         let output = Output::stdout(&self.display_jobs(|_| true));
         self.remove_finished_jobs();
         output
+    }
+
+    fn execute_history(&self) -> Output{
+        let output = self.editor.history().iter().cloned().collect::<Vec<_>>().join("\n");
+        Output::stdout(&output)
     }
 
     fn execute_echo(&self, args: &CommandLine) -> Output{
