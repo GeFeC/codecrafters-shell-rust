@@ -205,7 +205,7 @@ impl Shell{
     }
 
     fn execute_history(&self) -> Output{
-        let output = self.editor.history().iter().cloned().collect::<Vec<_>>().join("\n");
+        let output = self.editor.history().iter().enumerate().map(|(idx, entry)| format!("    {}  {entry}", idx + 1)).collect::<Vec<_>>().join("\n");
         Output::stdout(&output)
     }
 
