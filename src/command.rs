@@ -1,5 +1,4 @@
 use crate::env;
-use crate::lexer;
 use crate::lexer::{CommandLine, Token};
 use crate::output_redirection;
 use crate::output_redirection::{Redirection};
@@ -10,7 +9,6 @@ use crate::shell::{Shell};
 use crate::jobs::JobState;
 use crate::program::Program;
 use std::path::Path;
-use std::process::{Child};
 
 pub enum ExecutionPolicy{
     Foreground,
@@ -89,6 +87,8 @@ pub enum BuiltinCommand{
     Complete,
     #[strum(to_string = "jobs")]
     Jobs,
+    #[strum(to_string = "history")]
+    History,
 }
 
 pub enum Kind{
@@ -153,6 +153,7 @@ impl Shell{
                 BuiltinCommand::Cd => self.execute_cd(args),
                 BuiltinCommand::Complete => self.execute_complete(args),
                 BuiltinCommand::Jobs => self.execute_jobs(),
+                BuiltinCommand::History => todo!()
             }
             Kind::Executable{ name, args, .. } => self.execute_program(name, args, output_type),
         }

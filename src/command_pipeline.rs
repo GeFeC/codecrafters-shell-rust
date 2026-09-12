@@ -1,9 +1,6 @@
 use std::fs::OpenOptions;
 use std::process::Stdio;
-use std::string;
-use std::thread::current;
-
-use crate::command::{ExecutionStatus, Output};
+use crate::command::{ExecutionStatus};
 use crate::output_redirection::{Redirection, RedirectionTarget, RedirectionType};
 
 use std::io::Write;
