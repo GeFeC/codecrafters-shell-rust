@@ -34,9 +34,12 @@ impl Shell{
     }
 
     pub fn run(&mut self){
-        for h in self.editor.history(){
-            println!("{h}");
-        }
+        let history_file = std::env::var("HISTFILE").unwrap_or_else(|_|{
+            eprintln!("Could not load history file!");
+            String::new()
+        });
+
+        self.editor.load_history(&history_file).unwrap_or(());
 
         loop{
             let input = self.editor.readline("$ ");
@@ -53,7 +56,7 @@ impl Shell{
                     match CommandPipeline::new(input){
                         Ok(command) => {
                             if self.execute_cmd_pipeline(command).should_exit(){
-                                return;
+                                break;
                             }
                         },
                         Err(err) => {
@@ -72,6 +75,8 @@ impl Shell{
                 }
             }
         }
+
+        self.editor.append_history(&history_file).unwrap_or(());
     }
 
     
