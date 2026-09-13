@@ -237,6 +237,11 @@ impl Shell{
                     if let Err(err) = saving_status{
                         return Output::stderr(&format!("{err}"));
                     }
+
+                    if should_append{
+                        self.editor.clear_history().unwrap_or(());
+                    }
+
                     return Output::empty();
                 },
                 _ => return Output::stderr(&format!("history: {flag}: invalid option"))
