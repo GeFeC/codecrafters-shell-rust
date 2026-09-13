@@ -76,7 +76,7 @@ impl Shell{
         }
 
         if let Ok(history_file) = history_file{
-            let _ = self.editor.append_history(&history_file);
+            let _ = self.write_history(&history_file);
         }
     }
 

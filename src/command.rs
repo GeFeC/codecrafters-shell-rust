@@ -219,23 +219,10 @@ impl Shell{
                 flag @ ("-w" | "-a") => {
                     let should_append = flag == "-a";
 
-                    let saving_status = OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .append(should_append)
-                        .truncate(!should_append)
-                        .open(path)
-                        .and_then(|mut f|{
-                            for entry in self.editor.history(){
-                                writeln!(f, "{entry}")?;
-                            }
-
-                            Ok(())
-                        });
-
+                    let saving_status = self.save_history(path, should_append);
 
                     if let Err(err) = saving_status{
-                        return Output::stderr(&format!("{err}"));
+                        return Output::stderr(&err);
                     }
 
                     if should_append{

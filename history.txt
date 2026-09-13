@@ -1,0 +1,5 @@
+echo a
+echo b
+exit
+echo c
+exit
