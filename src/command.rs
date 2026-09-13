@@ -221,7 +221,6 @@ impl Shell{
                     for entry in self.editor.history(){
                         writeln!(file, "{entry}").unwrap();
                     }
-                    writeln!(file).unwrap();
 
                     //if let Err(err) = saving_status{
                         //return Output::stderr(&format!("{err}"));
