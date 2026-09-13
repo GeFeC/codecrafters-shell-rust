@@ -34,12 +34,11 @@ impl Shell{
     }
 
     pub fn run(&mut self){
-        let history_file = std::env::var("HISTFILE").unwrap_or_else(|_|{
-            eprintln!("Could not load history file!");
-            String::new()
-        });
+        let history_file = std::env::var("HISTFILE");
 
-        self.editor.load_history(&history_file).unwrap_or(());
+        if let Ok(history_file) = history_file.clone(){
+            let _ = self.editor.load_history(&history_file);
+        }
 
         loop{
             let input = self.editor.readline("$ ");
@@ -76,7 +75,9 @@ impl Shell{
             }
         }
 
-        self.editor.append_history(&history_file).unwrap_or(());
+        if let Ok(history_file) = history_file{
+            let _ = self.editor.append_history(&history_file);
+        }
     }
 
     
