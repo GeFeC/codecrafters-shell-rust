@@ -206,11 +206,22 @@ impl Shell{
     }
 
     fn execute_history(&mut self, args: &CommandLine) -> Output{
-        if let [Token::Arg(flag), Token::Arg(path)] = &args[..] && flag == "-r"{
-            if self.editor.load_history(path).is_err(){
-                return Output::stderr(&format!("{path}: file not found"));
+        if let [Token::Arg(flag), Token::Arg(path)] = &args[..]{
+            match flag.as_str(){
+                "-r" => {
+                    if self.editor.load_history(path).is_err(){
+                        return Output::stderr(&format!("{path}: file not found"));
+                    }
+                    return Output::empty();
+                },
+                "-w" => {
+                    if self.editor.save_history(path).is_err(){
+                        return Output::stderr(&format!("{path}: Could not save to file"));
+                    }
+                    return Output::empty();
+                },
+                _ => return Output::stderr(&format!("history: {flag}: invalid option"))
             }
-            return Output::empty();
         }
 
         let limited = !args.is_empty();
