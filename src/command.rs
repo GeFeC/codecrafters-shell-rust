@@ -205,8 +205,15 @@ impl Shell{
         output
     }
 
-    fn execute_history(&self, args: &CommandLine) -> Output{
-        let limited = args.len() > 0;
+    fn execute_history(&mut self, args: &CommandLine) -> Output{
+        if let [Token::Arg(flag), Token::Arg(path)] = &args[..] && flag == "-r"{
+            if self.editor.load_history(path).is_err(){
+                return Output::stderr(&format!("{path}: file not found"));
+            }
+            return Output::empty();
+        }
+
+        let limited = !args.is_empty();
         let last_n = match &args[..]{
             [] => 0,
             [Token::Arg(n)] => match n.parse::<usize>(){
@@ -225,7 +232,7 @@ impl Shell{
             .collect::<Vec<_>>()
             .join("\n");
 
-        return Output::stdout(&output);
+        Output::stdout(&output)
     }
 
     fn execute_echo(&self, args: &CommandLine) -> Output{
