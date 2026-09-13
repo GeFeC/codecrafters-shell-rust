@@ -216,15 +216,19 @@ impl Shell{
                     return Output::empty();
                 },
                 "-w" => {
-                    let mut file = std::fs::File::create(path).unwrap();
+                    let saving_status = std::fs::File::create(path)
+                        .and_then(|mut f|{
+                            for entry in self.editor.history(){
+                                writeln!(f, "{entry}")?;
+                            }
 
-                    for entry in self.editor.history(){
-                        writeln!(file, "{entry}").unwrap();
+                            Ok(())
+                        });
+
+
+                    if let Err(err) = saving_status{
+                        return Output::stderr(&format!("{err}"));
                     }
-
-                    //if let Err(err) = saving_status{
-                        //return Output::stderr(&format!("{err}"));
-                    //}
                     return Output::empty();
                 },
                 _ => return Output::stderr(&format!("history: {flag}: invalid option"))
