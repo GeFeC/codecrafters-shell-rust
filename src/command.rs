@@ -3,6 +3,7 @@ use crate::lexer::{CommandLine, Token};
 use crate::output_redirection;
 use crate::output_redirection::{Redirection};
 
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::str::FromStr;
 use rustyline::history::History;
@@ -215,8 +216,15 @@ impl Shell{
                     }
                     return Output::empty();
                 },
-                "-w" => {
-                    let saving_status = std::fs::File::create(path)
+                flag @ ("-w" | "-a") => {
+                    let should_append = flag == "-a";
+
+                    let saving_status = OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .append(should_append)
+                        .truncate(!should_append)
+                        .open(path)
                         .and_then(|mut f|{
                             for entry in self.editor.history(){
                                 writeln!(f, "{entry}")?;

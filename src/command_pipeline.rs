@@ -87,9 +87,9 @@ impl Shell{
             let filename = redirection.target.filepath();
             let file = OpenOptions::new()
                 .write(true)
+                .create(true)
                 .append(should_append)
                 .truncate(!should_append)
-                .create(true)
                 .open(filename)
                 .map_err(|err| format!("{err}"))?;
 
