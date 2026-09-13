@@ -3,6 +3,7 @@ use crate::lexer::{CommandLine, Token};
 use crate::output_redirection;
 use crate::output_redirection::{Redirection};
 
+use std::io::Write;
 use std::str::FromStr;
 use rustyline::history::History;
 use strum_macros::{EnumString, VariantNames};
@@ -215,9 +216,16 @@ impl Shell{
                     return Output::empty();
                 },
                 "-w" => {
-                    if self.editor.save_history(path).is_err(){
-                        return Output::stderr(&format!("{path}: Could not save to file"));
+                    let mut file = std::fs::File::create(path).unwrap();
+
+                    for entry in self.editor.history(){
+                        writeln!(file, "{entry}").unwrap();
                     }
+                    writeln!(file).unwrap();
+
+                    //if let Err(err) = saving_status{
+                        //return Output::stderr(&format!("{err}"));
+                    //}
                     return Output::empty();
                 },
                 _ => return Output::stderr(&format!("history: {flag}: invalid option"))

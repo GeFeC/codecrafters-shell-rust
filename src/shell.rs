@@ -34,6 +34,10 @@ impl Shell{
     }
 
     pub fn run(&mut self){
+        for h in self.editor.history(){
+            println!("{h}");
+        }
+
         loop{
             let input = self.editor.readline("$ ");
 
