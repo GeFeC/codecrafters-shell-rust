@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::jobs::{Job};
 use crate::{completer};
 use crate::command_pipeline::{CommandPipeline};
@@ -9,7 +11,8 @@ type Editor = rustyline::Editor<completer::Completer, DefaultHistory>;
 pub struct Shell{
     pub current_job_id: u32,
     pub editor: Editor,
-    pub jobs: Vec<Job>
+    pub jobs: Vec<Job>,
+    pub variables: HashMap<String, String>
 }
 
 impl Shell{
@@ -29,7 +32,8 @@ impl Shell{
         Ok(Self{
             current_job_id: 0,
             editor: Self::new_editor()?,
-            jobs: Vec::with_capacity(32)
+            jobs: Vec::with_capacity(32),
+            variables: HashMap::new()
         })
     }
 

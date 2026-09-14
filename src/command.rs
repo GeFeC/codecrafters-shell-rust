@@ -122,10 +122,18 @@ impl Shell{
 
     fn execute_declare(&mut self, args: &CommandLine) -> Output{
         match &args[..]{
-            [Token::Arg(flag), Token::Arg(var_name), ..] if flag == "-p" => {
-                Output::stdout(&format!("declare: {var_name}: not found"))
+            [Token::Arg(assignment)] if let Some((variable, value)) = assignment.split_once('=') => {
+                self.variables.insert(variable.to_owned(), value.to_owned());
+                Output::empty()
             },
-            _ => Output::empty()
+            [Token::Arg(flag), Token::Arg(var_name)] if flag == "-p" => {
+                let Some(value) = self.variables.get(var_name) else {
+                    return Output::stdout(&format!("declare: {var_name}: not found"));
+                };
+
+                Output::stdout(&format!("declare -- {var_name}={value}"))
+            },
+            _ => Output::stderr("usage: 'declare -p <var_name>' or 'declare <var_name>=<value>'")
         }
     }
 
