@@ -1,5 +1,5 @@
 use crate::command::{ Output };
-use crate::lexer;
+use crate::lexer::Token;
 use std::fs::{ OpenOptions };
 use std::io::Write;
 
@@ -30,7 +30,7 @@ pub enum RedirectionType{
     Append
 }
 
-pub fn get_redirection_and_new_command_args(command_args: Vec<lexer::Token>) -> (Option<Redirection>, Vec<lexer::Token>){
+pub fn get_redirection_and_new_command_args(command_args: Vec<Token>) -> (Option<Redirection>, Vec<Token>){
     let symbol_pos = command_args.iter().position(|e| e.is_redirection());
 
     let (symbol, command_args, target_file) = match symbol_pos{
@@ -49,7 +49,6 @@ pub fn get_redirection_and_new_command_args(command_args: Vec<lexer::Token>) -> 
     }
 
     let symbol = symbol.unwrap();
-    use lexer::Token;
 
     let Some(Token::Arg(target_file)) = target_file.into_iter().next() else{ 
         unreachable!("Wrong redirection file name not handled!");

@@ -123,8 +123,16 @@ impl Shell{
     fn execute_declare(&mut self, args: &CommandLine) -> Output{
         match &args[..]{
             [Token::Arg(assignment)] if let Some((variable, value)) = assignment.split_once('=') => {
-                self.variables.insert(variable.to_owned(), value.to_owned());
-                Output::empty()
+                let first_char = variable.chars().next().map(|c| {
+                    c.is_alphabetic() || c == '_'
+                });
+
+                if first_char == Some(true){
+                    self.variables.insert(variable.to_owned(), value.to_owned());
+                    return Output::empty();
+                }
+                
+                Output::stderr(&format!("declare: `{assignment}': not a valid identifier"))
             },
             [Token::Arg(flag), Token::Arg(var_name)] if flag == "-p" => {
                 let Some(value) = self.variables.get(var_name) else {
