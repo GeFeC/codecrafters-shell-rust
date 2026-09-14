@@ -44,8 +44,8 @@ impl CommandPipeline{
         (first_command, processes)
     }
 
-    pub fn new(commands: &str) -> Result<CommandPipeline, String>{
-        let commands = CommandLine::from(commands)?;
+    pub fn new(commands: &CommandLine) -> Result<CommandPipeline, String>{
+        
 
         let mut commands = &commands[..];
 
@@ -166,16 +166,20 @@ impl Shell{
 mod tests{
     use super::*;
 
+    fn command_pipeline(str: &str) -> CommandPipeline{
+        CommandPipeline::new(&CommandLine::from(str).unwrap()).unwrap()
+    }
+
     #[test]
     fn test_first_command_existence(){
-        let pipeline = CommandPipeline::new("ls | wc").unwrap();
+        let pipeline = command_pipeline("ls | wc");
 
         assert!(pipeline.first_command.is_none());
     }
 
     #[test]
     fn test_proc_count(){
-        let pipeline = CommandPipeline::new("ls | wc").unwrap();
+        let pipeline = command_pipeline("ls | wc");
 
         assert!(pipeline.processes.len() == 2);
     }

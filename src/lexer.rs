@@ -1,5 +1,5 @@
 use core::fmt;
-use std::ops::Deref;
+use std::ops::{ Deref, DerefMut };
 
 #[derive(Debug)]
 pub struct CommandLine(pub Vec<Token>);
@@ -9,6 +9,12 @@ impl Deref for CommandLine{
 
     fn deref(&self) -> &Self::Target{
         &self.0
+    }
+}
+
+impl DerefMut for CommandLine{
+    fn deref_mut(&mut self) -> &mut Self::Target{
+        &mut self.0
     }
 }
 
@@ -34,7 +40,12 @@ impl CommandLine{
                     let arg_contains_valid_data = !(c == '>' && ["1", "2"].contains(&arg.as_str())) && !arg.is_empty();
 
                     if arg_contains_valid_data{
-                        result.push(Token::Arg(arg.clone()));
+                        if let Some(var_name) = arg.strip_prefix("$"){
+                            result.push(Token::Variable(var_name.to_owned()));
+                        }
+                        else{
+                            result.push(Token::Arg(arg.clone()));
+                        }
                     }
                     arg.clear();
 
@@ -81,6 +92,7 @@ impl std::string::ToString for CommandLine{
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token{
     Arg(String),
+    Variable(String),
     Stdout,
     Stderr,
     StdoutAppend,
@@ -103,7 +115,8 @@ impl std::fmt::Display for Token{
             Self::Stderr => String::from("2>"),
             Self::StdoutAppend => String::from(">>"),
             Self::StderrAppend => String::from("2>>"),
-            Self::Pipe => String::from("|")
+            Self::Pipe => String::from("|"),
+            Self::Variable(var) => format!("${var}")
         })
     }
 }
@@ -344,6 +357,13 @@ mod tests{
         test(&[
             (r#"hello | world"#, vec![arg("hello"), Token::Pipe, arg("world")]),
             (r#"echo "hello | pipes" | wc"#, vec![arg("echo"), arg("hello | pipes"), Token::Pipe, arg("wc")]),
+        ]);
+    }
+
+    #[test]
+    fn test_variables(){
+        test(&[
+            (r#"echo $hello"#, vec![arg("echo"), Token::Variable("hello".to_string())]),
         ]);
     }
 }

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::jobs::{Job};
-use crate::{completer};
+use crate::lexer::Token;
+use crate::{completer, lexer};
 use crate::command_pipeline::{CommandPipeline};
 use rustyline::{ CompletionType, Config, history::DefaultHistory };
 use rustyline::error::{ReadlineError};
@@ -56,13 +57,21 @@ impl Shell{
                         continue;
                     }
 
-                    match CommandPipeline::new(input){
-                        Ok(command) => {
+                    match lexer::CommandLine::from(input).map(|mut cmd| { 
+                        for cmd in &mut cmd[..].iter_mut(){
+                            if let Token::Variable(var_name) = cmd{
+                                *cmd = Token::Arg(self.variables.get(var_name).unwrap_or(&String::new()).clone());
+                            }
+                        }
+
+                        CommandPipeline::new(&cmd) 
+                    }){
+                        Ok(Ok(command)) => {
                             if self.execute_cmd_pipeline(command).should_exit(){
                                 break;
                             }
                         },
-                        Err(err) => {
+                        Err(err) | Ok(Err(err)) => {
                             println!("{err}");
                         }
                     }
