@@ -83,24 +83,6 @@ impl Command{
 
 
 impl Shell{
-    pub fn command_output(&mut self, command: &Command) -> Output{
-        let Kind::Builtin { name, args } = &command.r#type else {
-            unreachable!("Executables should be handled in command pipeline");
-        };
-
-        match name{
-            BuiltinCommand::Exit => Output::empty(),
-            BuiltinCommand::Echo => self.execute_echo(args),
-            BuiltinCommand::Type => self.execute_type(args),
-            BuiltinCommand::Pwd => self.execute_pwd(),
-            BuiltinCommand::Cd => self.execute_cd(args),
-            BuiltinCommand::Complete => self.execute_complete(args),
-            BuiltinCommand::Jobs => self.execute_jobs(),
-            BuiltinCommand::History => self.execute_history(args),
-            BuiltinCommand::Declare => todo!()
-        }
-    }
-
     pub fn execute_command(&mut self, command: Command) -> ExecutionStatus{
         if let Kind::Builtin{ name: BuiltinCommand::Exit, .. } = command.r#type{
             return ExecutionStatus::Exit;
@@ -118,6 +100,33 @@ impl Shell{
         }
 
         ExecutionStatus::Continue
+    }
+
+    pub fn command_output(&mut self, command: &Command) -> Output{
+        let Kind::Builtin { name, args } = &command.r#type else {
+            unreachable!("Executables should be handled in command pipeline");
+        };
+
+        match name{
+            BuiltinCommand::Exit => Output::empty(),
+            BuiltinCommand::Echo => self.execute_echo(args),
+            BuiltinCommand::Type => self.execute_type(args),
+            BuiltinCommand::Pwd => self.execute_pwd(),
+            BuiltinCommand::Cd => self.execute_cd(args),
+            BuiltinCommand::Complete => self.execute_complete(args),
+            BuiltinCommand::Jobs => self.execute_jobs(),
+            BuiltinCommand::History => self.execute_history(args),
+            BuiltinCommand::Declare => self.execute_declare(args)
+        }
+    }
+
+    fn execute_declare(&mut self, args: &CommandLine) -> Output{
+        match &args[..]{
+            [Token::Arg(flag), Token::Arg(var_name), ..] if flag == "-p" => {
+                Output::stdout(&format!("declare: {var_name}: not found"))
+            },
+            _ => Output::empty()
+        }
     }
 
     fn execute_jobs(&mut self) -> Output{
