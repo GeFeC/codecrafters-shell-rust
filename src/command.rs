@@ -12,7 +12,6 @@ use std::path::Path;
 pub struct Command{
     pub r#type: Kind,
     pub redirection: Option<Redirection>,
-    pub execution_policy: ExecutionPolicy,
 }
 
 pub enum ExecutionPolicy{
@@ -55,15 +54,6 @@ impl Command{
             return Err(String::from("Invalid command name"));
         };
 
-        let mut command_args = command_args;
-        let mut execution_policy = ExecutionPolicy::Foreground; 
-        if let [actual_command_args @ .., Token::Arg(last)] = command_args && last == "&"{
-            command_args = actual_command_args; 
-            execution_policy = ExecutionPolicy::Background;
-        }
-
-        let execution_policy = execution_policy;
-
         let (redirection, command_args) = output_redirection::get_redirection_and_new_command_args(
             command_args.to_vec()
         );
@@ -84,8 +74,7 @@ impl Command{
         
         Ok(Command{
             r#type: command_type?,
-            redirection,
-            execution_policy
+            redirection
         })
     }
 }
