@@ -1,7 +1,7 @@
-use std::fs::OpenOptions;
 use std::process::Stdio;
-use crate::command::{ExecutionStatus};
-use crate::output_redirection::{Redirection, RedirectionTarget, RedirectionType};
+use crate::command::{ ExecutionStatus};
+use crate::jobs::JobState;
+use crate::output_redirection::{Redirection, RedirectionTarget};
 
 use std::io::Write;
 use crate::lexer::{CommandLine, Token};
@@ -19,22 +19,7 @@ pub struct CommandPipeline{
 }
 
 impl CommandPipeline{
-    pub fn new(commands: &str) -> Result<CommandPipeline, String>{
-        let commands = CommandLine::from(commands)?;
-
-        let mut commands = &commands[..];
-        let mut execution_policy = ExecutionPolicy::Foreground; 
-        if let [actual_commands @ .., Token::Arg(last)] = commands && last == "&"{
-            commands = actual_commands;
-            execution_policy = ExecutionPolicy::Background;
-        }
-        let raw = CommandLine(commands.to_vec());
-
-        let mut commands = commands
-            .split(|t| matches!(t, Token::Pipe))
-            .map(|cmd| Command::new(&CommandLine(cmd.to_vec())))
-            .collect::<Result<Vec<_>, _>>()?;
-
+    fn truncate_builtins_except_last_one(commands: &mut Vec<Command>) -> (Option<Command>, Vec<Program>){
         let idx = commands
             .iter()
             .rposition(|cmd| !matches!(cmd.r#type, command::Kind::Executable{..}));
@@ -56,6 +41,29 @@ impl CommandPipeline{
             Program::new(name).args(args)
         }).collect::<Vec<_>>();
 
+        (first_command, processes)
+    }
+
+    pub fn new(commands: &str) -> Result<CommandPipeline, String>{
+        let commands = CommandLine::from(commands)?;
+
+        let mut commands = &commands[..];
+
+        let mut execution_policy = ExecutionPolicy::Foreground; 
+        if let [actual_commands @ .., Token::Arg(last)] = commands && last == "&"{
+            commands = actual_commands;
+            execution_policy = ExecutionPolicy::Background;
+        }
+
+        let raw = CommandLine(commands.to_vec());
+
+        let mut commands = commands
+            .split(|t| matches!(t, Token::Pipe))
+            .map(|cmd| Command::new(&CommandLine(cmd.to_vec())))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let (first_command, processes) = Self::truncate_builtins_except_last_one(&mut commands);
+
         let redirection = if !commands.is_empty() {
             commands.pop().unwrap().redirection.clone()
         } else {
@@ -73,25 +81,15 @@ impl CommandPipeline{
 }
 
 impl Shell{
-    fn try_execute_cmd_pipeline(&mut self, mut pipeline: CommandPipeline) -> Result<ExecutionStatus, String>{
+    fn try_execute_cmd_pipeline(&mut self, pipeline: CommandPipeline) -> Result<ExecutionStatus, String>{
         let mut processes = pipeline.processes;
 
         let Some((last, all_but_last)) = processes.split_last_mut() else {
-            pipeline.first_command.as_mut().unwrap().execution_policy = pipeline.execution_policy;
             return Ok(self.execute_command(pipeline.first_command.unwrap()));
         };
 
         if let Some(redirection) = pipeline.redirection{
-            let should_append = matches!(redirection.r#type, RedirectionType::Append);
-
-            let filename = redirection.target.filepath();
-            let file = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .append(should_append)
-                .truncate(!should_append)
-                .open(filename)
-                .map_err(|err| format!("{err}"))?;
+            let file = redirection.open_file()?;
 
             match redirection.target{
                 RedirectionTarget::Stdout(_) => last.command.stdout(file),
@@ -145,13 +143,22 @@ impl Shell{
     }
 
     pub fn execute_cmd_pipeline(&mut self, pipeline: CommandPipeline) -> ExecutionStatus{
-        match self.try_execute_cmd_pipeline(pipeline){
+        let status = match self.try_execute_cmd_pipeline(pipeline){
             Ok(status) => status,
             Err(err) => {
                 println!("{err}");
                 ExecutionStatus::Continue
             }
+        };
+
+        self.update_jobs();
+        let jobs = self.display_jobs(|(_, job)| matches!(job.state, JobState::Done));
+        if !jobs.is_empty(){
+            println!("{}", jobs);
         }
+        self.remove_finished_jobs();
+
+        status
     }
 }
 

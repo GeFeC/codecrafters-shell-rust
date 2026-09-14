@@ -70,6 +70,21 @@ pub fn get_redirection_and_new_command_args(command_args: Vec<lexer::Token>) -> 
     (Some(Redirection{ target, r#type }), command_args)
 }
 
+impl Redirection{
+    pub fn open_file(&self) -> Result<std::fs::File, String>{
+        let should_append = matches!(self.r#type, RedirectionType::Append);
+        let filename = self.target.filepath();
+
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(should_append)
+            .truncate(!should_append)
+            .open(filename)
+            .map_err(|err| format!("{err}"))
+    }
+}
+
 impl Output{
     pub fn redirect(&self, redirection: &Redirection){
         if !matches!(redirection.target, RedirectionTarget::Stdout(_)) && !self.stdout.is_empty(){
@@ -80,19 +95,13 @@ impl Output{
             println!("{}", self.stderr);
         }
 
-        let (out, file) = match &redirection.target{
-            RedirectionTarget::Stdout(file) => (&self.stdout, file),
-            RedirectionTarget::Stderr(file) => (&self.stderr, file),
+        let out = match &redirection.target{
+            RedirectionTarget::Stdout(_) => &self.stdout,
+            RedirectionTarget::Stderr(_) => &self.stderr,
         };
 
-        let should_append = matches!(redirection.r#type, RedirectionType::Append);
-        let file = OpenOptions::new()
-            .write(true)
-            .append(should_append)
-            .truncate(!should_append)
-            .create(true)
-            .open(file)
-            .and_then(|mut f|{
+        let file = redirection.open_file()
+            .map(|mut f|{
                 write!(f, "{out}")?;
                 if !out.is_empty() && !out.ends_with("\n"){
                     return writeln!(f);

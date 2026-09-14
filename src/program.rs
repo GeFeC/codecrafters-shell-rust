@@ -30,14 +30,6 @@ impl Program{
         self
     }
 
-    pub fn spawn_and_wait(&mut self) -> Result<(), String>{
-        if let Err(err) = self.command.spawn().and_then(|mut c| c.wait()){
-            return Err(format!("{err}"));
-        }
-
-        Ok(())
-    }
-
     pub fn spawn(&mut self) -> Result<Child, impl Error>{
         self.command.spawn()
     }

@@ -3,20 +3,11 @@ use crate::lexer::{CommandLine, Token};
 use crate::output_redirection;
 use crate::output_redirection::{Redirection};
 
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::str::FromStr;
 use rustyline::history::History;
 use strum_macros::{EnumString, VariantNames};
 use crate::shell::{Shell};
-use crate::jobs::JobState;
-use crate::program::Program;
 use std::path::Path;
-
-pub enum ExecutionPolicy{
-    Foreground,
-    Background
-}
 
 pub struct Command{
     pub r#type: Kind,
@@ -24,54 +15,14 @@ pub struct Command{
     pub execution_policy: ExecutionPolicy,
 }
 
-pub struct Output{
-    pub stdout: String,
-    pub stderr: String
+pub enum ExecutionPolicy{
+    Foreground,
+    Background
 }
 
-impl Output{
-    pub fn empty() -> Output{
-        Output{
-            stdout: String::new(),
-            stderr: String::new()
-        }
-    }
-
-    pub fn stdout(str: &str) -> Output{
-        Output{
-            stdout: str.to_owned(),
-            stderr: String::new()
-        }
-    }
-
-    pub fn stderr(str: &str) -> Output{
-        Output{
-            stderr: str.to_owned(),
-            stdout: String::new()
-        }
-    }
-}
-
-impl std::fmt::Display for Output{
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error>{
-        let stdout = match &self.stdout{
-            s if s.is_empty() => "",
-            s => &format!("{s}\n")
-        };
-
-        let stderr = match &self.stderr{
-            s if s.is_empty() => "",
-            s => &format!("{s}\n")
-        };
-
-        write!(fmt, "{}{}", stdout, stderr)
-    }
-}
-
-pub enum OutputType{
-    Display,
-    Redirect,
-    Background //For ExecutionPolicy::Background
+pub enum Kind{
+    Builtin{ name: BuiltinCommand, args: CommandLine },
+    Executable{ name: String, full_path: String, args: CommandLine },
 }
 
 #[derive(PartialEq, EnumString, VariantNames)]
@@ -92,11 +43,6 @@ pub enum BuiltinCommand{
     Jobs,
     #[strum(to_string = "history")]
     History,
-}
-
-pub enum Kind{
-    Builtin{ name: BuiltinCommand, args: CommandLine },
-    Executable{ name: String, full_path: String, args: CommandLine },
 }
 
 impl Command{
@@ -146,24 +92,21 @@ impl Command{
 
 
 impl Shell{
-    fn execute_command_helper(&mut self, command: &Command, output_type: OutputType) -> Output{
-        match &command.r#type{
-            Kind::Builtin{ name, args } => match name{
-                BuiltinCommand::Exit => Output::empty(),
-                BuiltinCommand::Echo => self.execute_echo(args),
-                BuiltinCommand::Type => self.execute_type(args),
-                BuiltinCommand::Pwd => self.execute_pwd(),
-                BuiltinCommand::Cd => self.execute_cd(args),
-                BuiltinCommand::Complete => self.execute_complete(args),
-                BuiltinCommand::Jobs => self.execute_jobs(),
-                BuiltinCommand::History => self.execute_history(args)
-            }
-            Kind::Executable{ name, args, .. } => self.execute_program(name, args, output_type),
-        }
-    }
-
     pub fn command_output(&mut self, command: &Command) -> Output{
-        self.execute_command_helper(command, OutputType::Redirect)
+        let Kind::Builtin { name, args } = &command.r#type else {
+            unreachable!("Executables should be handled in command pipeline");
+        };
+
+        match name{
+            BuiltinCommand::Exit => Output::empty(),
+            BuiltinCommand::Echo => self.execute_echo(args),
+            BuiltinCommand::Type => self.execute_type(args),
+            BuiltinCommand::Pwd => self.execute_pwd(),
+            BuiltinCommand::Cd => self.execute_cd(args),
+            BuiltinCommand::Complete => self.execute_complete(args),
+            BuiltinCommand::Jobs => self.execute_jobs(),
+            BuiltinCommand::History => self.execute_history(args)
+        }
     }
 
     pub fn execute_command(&mut self, command: Command) -> ExecutionStatus{
@@ -171,15 +114,7 @@ impl Shell{
             return ExecutionStatus::Exit;
         } 
 
-        let output_type = match command.execution_policy{
-            ExecutionPolicy::Background => OutputType::Background,
-            ExecutionPolicy::Foreground => match command.redirection{
-                None => OutputType::Display,
-                Some(_) => OutputType::Redirect,
-            }
-        };
-
-        let result = self.execute_command_helper(&command, output_type);
+        let result = self.command_output(&command);
 
         match command.redirection{
             Some(redirection) => {
@@ -189,13 +124,6 @@ impl Shell{
                 print!("{result}");
             }
         }
-
-        self.update_jobs();
-        let jobs = self.display_jobs(|(_, job)| matches!(job.state, JobState::Done));
-        if !jobs.is_empty(){
-            println!("{}", jobs);
-        }
-        self.remove_finished_jobs();
 
         ExecutionStatus::Continue
     }
@@ -325,32 +253,52 @@ impl Shell{
             _ => Output::stderr("Usage: complete <'-p'/'-C'/'-r'> <command>")
         }
     }
+}
 
-    pub fn execute_program(&mut self, program_name: &str, args: &CommandLine, output_type: OutputType) -> Output{
-        let mut program = Program::new(program_name).args(args);
+pub struct Output{
+    pub stdout: String,
+    pub stderr: String
+}
 
-        match output_type{
-            OutputType::Background => {
-                match program.spawn(){
-                    Ok(child) => {
-                        self.start_job(args, child)
-                    },
-                    Err(err) => {
-                        eprintln!("{err}");
-                        Output::empty()
-                    }
-                }
-            }
-            OutputType::Redirect => program.output(),
-            OutputType::Display => {
-                if let Err(err) = program.spawn_and_wait(){
-                    return Output::stderr(&err);
-                }
-                Output::empty()
-            }
+impl Output{
+    pub fn empty() -> Output{
+        Output{
+            stdout: String::new(),
+            stderr: String::new()
+        }
+    }
+
+    pub fn stdout(str: &str) -> Output{
+        Output{
+            stdout: str.to_owned(),
+            stderr: String::new()
+        }
+    }
+
+    pub fn stderr(str: &str) -> Output{
+        Output{
+            stderr: str.to_owned(),
+            stdout: String::new()
         }
     }
 }
+
+impl std::fmt::Display for Output{
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error>{
+        let stdout = match &self.stdout{
+            s if s.is_empty() => "",
+            s => &format!("{s}\n")
+        };
+
+        let stderr = match &self.stderr{
+            s if s.is_empty() => "",
+            s => &format!("{s}\n")
+        };
+
+        write!(fmt, "{}{}", stdout, stderr)
+    }
+}
+
 
 pub enum ExecutionStatus{
     Exit,

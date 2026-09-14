@@ -22,10 +22,6 @@ impl Shell{
         saving_status.map_err(|err| format!("{err}"))
     }
 
-    pub fn append_history(&mut self, filepath: &str) -> Result<(), String>{
-        self.save_history(filepath, true)
-    }
-
     pub fn write_history(&mut self, filepath: &str) -> Result<(), String>{
         self.save_history(filepath, false)
     }
