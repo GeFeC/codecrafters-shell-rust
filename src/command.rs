@@ -42,6 +42,8 @@ pub enum BuiltinCommand{
     Jobs,
     #[strum(to_string = "history")]
     History,
+    #[strum(to_string = "declare")]
+    Declare,
 }
 
 impl Command{
@@ -94,7 +96,8 @@ impl Shell{
             BuiltinCommand::Cd => self.execute_cd(args),
             BuiltinCommand::Complete => self.execute_complete(args),
             BuiltinCommand::Jobs => self.execute_jobs(),
-            BuiltinCommand::History => self.execute_history(args)
+            BuiltinCommand::History => self.execute_history(args),
+            BuiltinCommand::Declare => todo!()
         }
     }
 
