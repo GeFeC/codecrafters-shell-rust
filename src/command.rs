@@ -131,7 +131,7 @@ impl Shell{
                     return Output::stdout(&format!("declare: {var_name}: not found"));
                 };
 
-                Output::stdout(&format!("declare -- {var_name}={value}"))
+                Output::stdout(&format!("declare -- {var_name}=\"{value}\""))
             },
             _ => Output::stderr("usage: 'declare -p <var_name>' or 'declare <var_name>=<value>'")
         }
