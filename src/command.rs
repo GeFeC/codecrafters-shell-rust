@@ -123,11 +123,13 @@ impl Shell{
     fn execute_declare(&mut self, args: &CommandLine) -> Output{
         match &args[..]{
             [Token::Arg(assignment)] if let Some((variable, value)) = assignment.split_once('=') => {
-                let first_char = variable.chars().next().map(|c| {
+                let first_char_valid = variable.chars().next().map(|c| {
                     c.is_alphabetic() || c == '_'
                 });
 
-                if first_char == Some(true){
+                let valid_identifier = variable.chars().all(|c| c.is_alphanumeric() || c == '_');
+
+                if first_char_valid == Some(true) && valid_identifier{
                     self.variables.insert(variable.to_owned(), value.to_owned());
                     return Output::empty();
                 }
