@@ -9,6 +9,7 @@ mod program;
 mod jobs;
 mod command_pipeline;
 mod history;
+mod variables;
 
 use shell::Shell;
 

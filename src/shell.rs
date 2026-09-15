@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
 use crate::jobs::{Job};
-use crate::lexer::{CommandLine, Token};
+use crate::lexer::{Token};
 use crate::{completer, lexer};
 use crate::command_pipeline::{CommandPipeline};
 use rustyline::{ CompletionType, Config, history::DefaultHistory };
 use rustyline::error::{ReadlineError};
-use std::cmp::min;
 
 type Editor = rustyline::Editor<completer::Completer, DefaultHistory>;
 
@@ -37,37 +36,6 @@ impl Shell{
             jobs: Vec::with_capacity(32),
             variables: HashMap::new()
         })
-    }
-
-    fn insert_variables_values(&mut self, arg: String) -> String{
-        let mut result = String::with_capacity(arg.len());
-
-        let dollar_pos = arg.find('$').unwrap_or(arg.len());
-        result.push_str(&arg[0..dollar_pos]);
-        if dollar_pos == arg.len() {
-            return result;
-        }
-
-        let arg = &arg[(dollar_pos + 1)..];
-        let var_end = arg
-            .chars()
-            .into_iter()
-            .position(|c| c == ' ' || c == '$')
-            .unwrap_or(arg.len());
-
-        result.push_str(self.variables.get(&String::from(&arg[..var_end])).unwrap_or(&"undefined".to_owned()));
-        //
-        // let mut pos = 0;
-        // while pos < arg.len(){
-        //     let Some(pos_) = arg.find('$') else { break; };
-        //     pos = pos_;
-        //
-        //     pos = min(
-        //         arg[(pos + 1)..].find(' ').unwrap_or(arg.len()),
-        //         arg[(pos + 1)..].find('$').unwrap_or(arg.len()),
-        //     );
-        // }
-        result
     }
 
     pub fn run(&mut self){
