@@ -14,22 +14,35 @@ impl Shell{
             }
 
             arg = &arg[(dollar_pos + 1)..];
-            let var_end = arg
-                .chars()
-                .into_iter()
-                .position(|c| c == ' ' || c == '$')
-                .unwrap_or(arg.len());
+
+            let mut var_begin = 0;
+            let var_end: Option<usize>;
+            let mut arg_iter = arg.chars();
+
+            if arg.starts_with("{"){
+                var_begin = 1;
+                var_end = arg_iter
+                    .position(|c| c == '}');
+            }
+            else{
+                var_end = arg_iter
+                    .position(|c| c == ' ' || c == '$');
+            }
+
+            let var_end = var_end.unwrap_or(arg.len());
 
             if var_end == 0{
                 result.push('$');
             }
             else {
-                let var_name = &arg[..var_end];
+                let var_name = &arg[var_begin..var_end];
                 let var_value = self.variables.get(var_name);
                 result.push_str(var_value.unwrap_or(&String::new()));
             }
 
-            arg = &arg[var_end..];
+            let next_chars = var_end + var_begin; //If var_begin==1, then there was '{' after the '$'
+                                                  //so we have to skip the '}' at the end
+            arg = &arg[next_chars..];
         }
         
         result
@@ -59,5 +72,8 @@ use super::*;
         test("$hello$hello", "worldworld");
         test("$hello $hello", "world world");
         test("$hello$pi", "world3.1415");
+        test("${hello}", "world");
+        test("${hello}{hello}", "world{hello}");
+        test("hello_${hello}_1", "hello_world_1");
     }
 }
