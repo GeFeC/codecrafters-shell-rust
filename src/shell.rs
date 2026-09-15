@@ -63,7 +63,7 @@ impl Shell{
                             *arg = self.insert_variables_values(arg.clone());
                         }
 
-                        cmd.retain(|e| *e != Token::Arg("".to_owned()));
+                        //cmd.retain(|e| *e != Token::Arg("".to_owned()));
 
                         CommandPipeline::new(&cmd) 
                     }){
