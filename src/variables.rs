@@ -75,5 +75,6 @@ use super::*;
         test("${hello}", "world");
         test("${hello}{hello}", "world{hello}");
         test("hello_${hello}_1", "hello_world_1");
+        test("${missing} ${missing} ${missing}", "  ");
     }
 }
